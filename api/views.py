@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from openai import OpenAI
 from pgvector.django import CosineDistance
-from .models import Chunk
+from .models import Chunk, Document
 
 client = OpenAI()
 
@@ -91,4 +91,53 @@ def ask(request):
             }
             for c in chunks
         ],
+    })
+
+def simple_chunk(text: str, max_chars: int = 900):
+    """Split text into roughly max_chars chunks (v1)."""
+    text = (text or "").strip()
+    if not text:
+        return[]
+    chunks = []
+    i = 0
+    while i < len(text):
+        chunk = text[i:i+max_chars].strip()
+        if chunk:
+            chunks.append(chunk)
+        i += max_chars
+    return chunks
+
+@csrf_exempt
+def ingest_text(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    body = json.loads(request.body.decode("utf-8"))
+    title = (body.get("title") or "Untitled").strip()
+    text = body.get("text") or ""
+
+    parts = simple_chunk(text)
+    if not parts:
+        return JsonResponse({"error": "No text to ingest"}, status=400)
+
+    doc = Document.objects.create(title=title, source="ingest_text")
+
+    # Embed in one call (cheaper/faster than one-by-one)
+    embs = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=parts,
+    ).data
+
+    for i, (chunk_text, item) in enumerate(zip(parts, embs)):
+        Chunk.objects.create(
+            document=doc,
+            chunk_index=i,
+            text=chunk_text,
+            embedding=item.embedding,
+        )
+
+    return JsonResponse({
+        "document_id": doc.id,
+        "chunks_created": len(parts),
+        "title": doc.title,
     })
