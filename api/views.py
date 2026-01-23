@@ -50,6 +50,13 @@ def ask(request):
     body = json.loads(request.body.decode("utf-8"))
     question = body.get("question", "")
     k = int(body.get("k", 5))
+    document_id = body.get("document_id")
+
+    if document_id not in (None, "", 0):
+        qs = qs.filter(document_id=int(document_id))
+
+    if not question.strip():
+        return JsonResponse({"error": "question is required"}, status=400)
 
     # 1) embed question
     q_emb = client.embeddings.create(
@@ -58,10 +65,13 @@ def ask(request):
     ).data[0].embedding
 
     # 2) retrieve top-k chunks
+    qs = Chunk.objects.exclude(embedding=None)
+
+    if document_id:
+        qs = qs.filter(document_id=document_id)
+
     chunks = (
-        Chunk.objects
-        .exclude(embedding=None)
-        .annotate(distance=CosineDistance("embedding", q_emb))
+        qs.annotate(distance=CosineDistance("embedding", q_emb))
         .order_by("distance")[:k]
     )
 
