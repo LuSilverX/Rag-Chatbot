@@ -53,9 +53,6 @@ def ask(request):
     k = int(body.get("k", 5))
     document_id = body.get("document_id")
 
-    if document_id not in (None, "", 0):
-        qs = qs.filter(document_id=int(document_id))
-
     if not question.strip():
         return JsonResponse({"error": "question is required"}, status=400)
 
@@ -68,17 +65,21 @@ def ask(request):
     # 2) retrieve top-k chunks
     qs = Chunk.objects.exclude(embedding=None)
 
-    if document_id:
-        qs = qs.filter(document_id=document_id)
+    if document_id not in (None, "", 0):
+        qs = qs.filter(document_id=int(document_id))
 
     chunks = (
         qs.annotate(distance=CosineDistance("embedding", q_emb))
         .order_by("distance")[:k]
     )
 
-    if not chunks:
-        return JsonResponse({"answer": "I don't know.", "sources": []})
+    # guardrail: if best match is too weak, refuse
+    max_distance = float(body.get("max_distance", 0.75))  # tune later
 
+    best = chunks[0] if chunks else None
+    if not best or float(best.distance) > max_distance:
+        return JsonResponse({"answer": "I don't know.", "sources": []})
+   
     context = "\n\n".join([f"[source {i+1}] {c.text}" for i, c in enumerate(chunks)])
 
     # 3) generate answer grounded in context
