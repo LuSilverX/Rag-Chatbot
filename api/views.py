@@ -5,6 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from openai import OpenAI
 from pgvector.django import CosineDistance
 from .models import Chunk, Document
+import re
 
 client = OpenAI()
 
@@ -103,6 +104,7 @@ def ask(request):
         ],
     })
 
+'''
 def simple_chunk(text: str, max_chars: int = 900):
     """Split text into roughly max_chars chunks (v1)."""
     text = (text or "").strip()
@@ -115,6 +117,40 @@ def simple_chunk(text: str, max_chars: int = 900):
         if chunk:
             chunks.append(chunk)
         i += max_chars
+    return chunks
+'''
+
+def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
+    """
+    v2 chunker:
+    - splits on sentences/paragraphs
+    - packs into chunks up to max_chars
+    - overlaps last 'overlap' chars between chunks
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    # Split into sentence-ish units (simple, good enough for v2)
+    parts = [p.strip() for p in re.split(r'(?<=[.!?])\s+|\n+', text) if p.strip()]
+
+    chunks = []
+    buf = ""
+
+    for p in parts:
+        if not buf:
+            buf = p
+        elif len(buf) + 1 + len(p) <= max_chars:
+            buf = f"{buf} {p}"
+        else:
+            chunks.append(buf.strip())
+            # start next buffer with overlap from previous chunk
+            tail = buf[-overlap:] if overlap > 0 else ""
+            buf = f"{tail} {p}".strip()
+
+    if buf.strip():
+        chunks.append(buf.strip())
+
     return chunks
 
 @csrf_exempt
