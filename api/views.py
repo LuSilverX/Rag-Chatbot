@@ -163,11 +163,15 @@ def ingest_text(request):
     title = (body.get("title") or "Untitled").strip()
     text = body.get("text") or ""
 
-    parts = simple_chunk(text)
+    parts = chunk_text(text)
     if not parts:
         return JsonResponse({"error": "No text to ingest"}, status=400)
 
-    doc = Document.objects.create(title=title, source="ingest_text")
+    doc, created = Document.objects.get_or_create(title=title, source="ingested_text")
+    
+    #IF doc already exists, wipe old chunks so this is an "update"
+    if not created:
+        Chunk.objects.filter(document=doc).delete()
 
     # Embed in one call (cheaper/faster than one-by-one)
     embs = client.embeddings.create(
@@ -175,11 +179,11 @@ def ingest_text(request):
         input=parts,
     ).data
 
-    for i, (chunk_text, item) in enumerate(zip(parts, embs)):
+    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
         Chunk.objects.create(
             document=doc,
             chunk_index=i,
-            text=chunk_text,
+            text=chunk_str,
             embedding=item.embedding,
         )
 
@@ -187,4 +191,5 @@ def ingest_text(request):
         "document_id": doc.id,
         "chunks_created": len(parts),
         "title": doc.title,
+        "status": "created" if created else "updated",
     })
