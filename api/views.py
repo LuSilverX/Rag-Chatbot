@@ -4,8 +4,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from openai import OpenAI
 from pgvector.django import CosineDistance
-from .models import Chunk, Document
+from .models import Chunk, Document, QueryLog
 import re
+import time
 
 client = OpenAI()
 
@@ -45,56 +46,63 @@ def retrieve(request):
 
 @csrf_exempt
 def ask(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST only"}, status=405)
+    t0 = time.perf_counter()
+    log = None
 
-    body = json.loads(request.body.decode("utf-8"))
-    question = body.get("question", "")
-    k = int(body.get("k", 5))
-    document_id = body.get("document_id")
+    try:
+        if request.method != "POST":
+            return JsonResponse({"error": "POST only"}, status=405)
 
-    if not question.strip():
-        return JsonResponse({"error": "question is required"}, status=400)
+        body = json.loads(request.body.decode("utf-8"))
+        question = body.get("question", "")
+        k = int(body.get("k", 5))
+        document_id = body.get("document_id")
 
-    # 1) embed question
-    q_emb = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=question,
-    ).data[0].embedding
+        if not question.strip():
+            return JsonResponse({"error": "question is required"}, status=400)
 
-    # 2) retrieve top-k chunks
-    qs = Chunk.objects.exclude(embedding=None)
+        # 1) embed question
+        q_emb = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=question,
+        ).data[0].embedding
 
-    if document_id not in (None, "", 0):
-        qs = qs.filter(document_id=int(document_id))
+        # 2) retrieve top-k chunks
+        qs = Chunk.objects.exclude(embedding=None)
 
-    chunks = (
-        qs.annotate(distance=CosineDistance("embedding", q_emb))
-        .order_by("distance")[:k]
-    )
+        if document_id not in (None, "", 0):
+            qs = qs.filter(document_id=int(document_id))
 
-    # guardrail: if best match is too weak, refuse
-    max_distance = float(body.get("max_distance", 0.75))  # tune later
+        chunks = (
+            qs.annotate(distance=CosineDistance("embedding", q_emb))
+            .order_by("distance")[:k]
+        )
 
-    best = chunks[0] if chunks else None
-    if not best or float(best.distance) > max_distance:
-        return JsonResponse({"answer": "I don't know.", "sources": []})
-   
-    context = "\n\n".join([f"[source {i+1}] {c.text}" for i, c in enumerate(chunks)])
+        # guardrail: if best match is too weak, refuse
+        max_distance = float(body.get("max_distance", 0.75))  # tune later
 
-    # 3) generate answer grounded in context
-    resp = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[
-            {"role": "system", "content": "Answer using ONLY the provided sources. If the sources don't contain the answer, say: I don't know."},
-            {"role": "user", "content": f"Question: {question}\n\nSources:\n{context}"},
-        ],
-    )
+        best = chunks[0] if chunks else None
+        best_distance = float(best.distance) if best else None
 
-    return JsonResponse({
-        "question": question,
-        "answer": resp.output_text,
-        "sources": [
+        # Create log early (so we can update it regardless of outcome)
+        log = QueryLog.objects.create(
+            question=question,
+            k=k,
+            document_id=int(document_id) if document_id not in (None, "", 0) else None,
+            max_distance=max_distance,
+            best_distance=best_distance,
+        )
+
+        # guardrail
+        if not best or float(best.distance) > max_distance:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            log.answer = "I don't know."
+            log.sources = []
+            log.latency_ms = latency_ms
+            log.save(update_fields=["answer", "sources", "latency_ms"])
+            return JsonResponse({"answer": "I don't know.", "sources": []})
+        
+        sources = [
             {
                 "document_id": c.document_id,
                 "chunk_index": c.chunk_index,
@@ -102,9 +110,40 @@ def ask(request):
                 "distance": float(c.distance),
             }
             for c in chunks
-        ],
-    })
+        ]
+        context = "\n\n".join([f"[source {i+1}] {c.text}" for i, c in enumerate(chunks)])
 
+        # 3) generate answer grounded in context
+        resp = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[
+                {"role": "system", "content": "Answer using ONLY the provided sources. If the sources don't contain the answer, say: I don't know."},
+                {"role": "user", "content": f"Question: {question}\n\nSources:\n{context}"},
+            ],
+        )
+
+        answer = resp.output_text
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+
+        log.answer = answer
+        log.sources = sources
+        log.latency_ms = latency_ms
+        log.save(update_fields=["answer", "sources", "latency_ms"])
+
+        return JsonResponse({
+            "question": question,
+            "answer": answer,
+            "sources": sources,
+        })
+    
+    except Exception as e:
+        # If anything breaks, record it
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        if log:
+            log.error = repr(e)
+            log.latency_ms = latency_ms
+            log.save(update_fields=["error", "latency_ms"])
+            return JsonResponse({"error": "internal_error"}, status=500)
 '''
 def simple_chunk(text: str, max_chars: int = 900):
     """Split text into roughly max_chars chunks (v1)."""

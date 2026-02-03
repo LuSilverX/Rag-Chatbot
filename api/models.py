@@ -30,3 +30,23 @@ class Chunk(models.Model):
                 opclasses=['vector_cosine_ops'],
             )
         ]
+
+class QueryLog(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    question = models.TextField()
+    answer = models.TextField(blank=True, default="")
+    
+    k = models.IntegerField(default=5)  
+    document_id = models.IntegerField(null=True, blank=True)  
+
+    max_distance = models.FloatField(null=True, blank=True) 
+    best_distance = models.FloatField(null=True, blank=True)  
+
+    sources = models.JSONField(default=list)  # list of source + distances
+    latency_ms = models.IntegerField(null=True, blank=True)
+
+    error = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return f"{self.created_at: %Y-%m-%d %H:%M:%S} - {self.question[:40]}"
