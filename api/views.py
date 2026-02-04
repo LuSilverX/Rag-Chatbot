@@ -73,6 +73,11 @@ def ask(request):
 
         if document_id not in (None, "", 0):
             qs = qs.filter(document_id=int(document_id))
+        else:
+            # default: scope to most recently created document
+            latest_doc = Document.objects.order_by("-id").first()
+            if latest_doc:
+                qs = qs.filter(document_id=latest_doc.id)
 
         chunks = (
             qs.annotate(distance=CosineDistance("embedding", q_emb))
@@ -80,7 +85,9 @@ def ask(request):
         )
 
         # guardrail: if best match is too weak, refuse
-        max_distance = float(body.get("max_distance", 0.75))  # tune later
+        scoped = document_id not in (None, "", 0)  # or set True when you default to latest_doc
+        max_distance_default = 0.95 if scoped else 0.75
+        max_distance = float(body.get("max_distance", max_distance_default))
 
         best = chunks[0] if chunks else None
         best_distance = float(best.distance) if best else None
