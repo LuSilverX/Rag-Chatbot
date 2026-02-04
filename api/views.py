@@ -7,6 +7,7 @@ from pgvector.django import CosineDistance
 from .models import Chunk, Document, QueryLog
 import re
 import time
+from pypdf import PdfReader
 
 client = OpenAI()
 
@@ -256,4 +257,50 @@ def logs(request):
             }
             for r in rows
         ]
+    })
+
+@csrf_exempt
+def ingest_pdf(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    if "file" not in request.FILES:
+        return JsonResponse({"error": "Missing file field"}, status=400)
+
+    uploaded = request.FILES["file"]
+    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
+
+    reader = PdfReader(uploaded)
+    text = "\n".join([(page.extract_text() or "") for page in reader.pages]).strip()
+
+    if not text:
+        return JsonResponse({"error": "Could not extract text from PDF"}, status=400)
+
+    # Reuse your existing ingestion logic
+    parts = chunk_text(text)
+    if not parts:
+        return JsonResponse({"error": "No text to ingest"}, status=400)
+
+    doc, created = Document.objects.get_or_create(title=title, source="pdf")
+    if not created:
+        Chunk.objects.filter(document=doc).delete()
+
+    embs = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=parts,
+    ).data
+
+    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
+        Chunk.objects.create(
+            document=doc,
+            chunk_index=i,
+            text=chunk_str,
+            embedding=item.embedding,
+        )
+
+    return JsonResponse({
+        "document_id": doc.id,
+        "title": doc.title,
+        "chunks_created": len(parts),
+        "status": "created" if created else "updated",
     })
