@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.views.decorators.http import require_GET
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -231,4 +231,29 @@ def ingest_text(request):
         "chunks_created": len(parts),
         "title": doc.title,
         "status": "created" if created else "updated",
+    })
+
+@require_GET
+def logs(request):
+    limit = int(request.GET.get("limit", 20))
+    limit = max(1, min(limit, 100)) 
+
+    rows = QueryLog.objects.order_by("-id")[:limit]
+
+    return JsonResponse({
+        "count": rows.count(),
+        "logs": [
+            {
+                "id": r.id,
+                "created_at": r.created_at.isoformat(),
+                "question": r.question,
+                "k": r.k,
+                "document_id": r.document_id,
+                "max_distance": r.max_distance,
+                "best_distance": r.best_distance,
+                "error": r.error,
+                "latency_ms": r.latency_ms,
+            }
+            for r in rows
+        ]
     })
