@@ -1,3 +1,4 @@
+from urllib import request
 from django.views.decorators.http import require_GET
 import json
 from django.http import JsonResponse
@@ -55,12 +56,49 @@ def ask(request):
             return JsonResponse({"error": "POST only"}, status=405)
 
         body = json.loads(request.body.decode("utf-8"))
-        question = body.get("question", "")
+        question = (body.get("question") or "").strip()
         k = int(body.get("k", 5))
         document_id = body.get("document_id")
 
-        if not question.strip():
+        if not question:
             return JsonResponse({"error": "question is required"}, status=400)
+
+        # Decide whether to scope to a document
+        q = question.lower()
+        doc_intent = any(p in q for p in [
+            "summarize", "summary", "this pdf", "the pdf", "this document", "the document"
+        ])
+
+        qs = Chunk.objects.exclude(embedding=None)
+
+        provided_doc_id = body.get("document_id")
+        session_doc_id = request.session.get("current_document_id")
+
+        effective_document_id = None
+        scoped = False
+
+
+        if provided_doc_id not in (None, "", 0):
+            effective_document_id = int(provided_doc_id)
+        elif session_doc_id:
+            effective_document_id = int(session_doc_id)
+        elif doc_intent:
+            latest_doc = Document.objects.order_by("-id").first()
+            if latest_doc:
+                effective_document_id = latest_doc.id
+
+        if document_id not in (None, "", 0):
+            effective_document_id = int(document_id)
+            qs = qs.filter(document_id=effective_document_id)
+            scoped = True
+
+        elif doc_intent:
+            latest_doc = Document.objects.order_by("-id").first()
+            if latest_doc:
+                effective_document_id = latest_doc.id
+                qs = qs.filter(document_id=effective_document_id)
+                scoped = True
+            # if no latest_doc, leave unscoped (search everything)
 
         # 1) embed question
         q_emb = client.embeddings.create(
@@ -68,40 +106,28 @@ def ask(request):
             input=question,
         ).data[0].embedding
 
-        # 2) retrieve top-k chunks
-        qs = Chunk.objects.exclude(embedding=None)
-
-        if document_id not in (None, "", 0):
-            qs = qs.filter(document_id=int(document_id))
-        else:
-            # default: scope to most recently created document
-            latest_doc = Document.objects.order_by("-id").first()
-            if latest_doc:
-                qs = qs.filter(document_id=latest_doc.id)
-
+        # 2) retrieve top-k
         chunks = (
             qs.annotate(distance=CosineDistance("embedding", q_emb))
-            .order_by("distance")[:k]
+              .order_by("distance")[:k]
         )
 
-        # guardrail: if best match is too weak, refuse
-        scoped = document_id not in (None, "", 0)  # or set True when you default to latest_doc
+        # guardrail
         max_distance_default = 0.95 if scoped else 0.75
         max_distance = float(body.get("max_distance", max_distance_default))
 
         best = chunks[0] if chunks else None
         best_distance = float(best.distance) if best else None
 
-        # Create log early (so we can update it regardless of outcome)
+        # log early
         log = QueryLog.objects.create(
             question=question,
             k=k,
-            document_id=int(document_id) if document_id not in (None, "", 0) else None,
+            document_id=effective_document_id,
             max_distance=max_distance,
             best_distance=best_distance,
         )
 
-        # guardrail
         if not best or float(best.distance) > max_distance:
             latency_ms = int((time.perf_counter() - t0) * 1000)
             log.answer = "I don't know."
@@ -109,7 +135,7 @@ def ask(request):
             log.latency_ms = latency_ms
             log.save(update_fields=["answer", "sources", "latency_ms"])
             return JsonResponse({"answer": "I don't know.", "sources": []})
-        
+
         sources = [
             {
                 "document_id": c.document_id,
@@ -121,7 +147,6 @@ def ask(request):
         ]
         context = "\n\n".join([f"[source {i+1}] {c.text}" for i, c in enumerate(chunks)])
 
-        # 3) generate answer grounded in context
         resp = client.responses.create(
             model="gpt-4.1-mini",
             input=[
@@ -138,20 +163,18 @@ def ask(request):
         log.latency_ms = latency_ms
         log.save(update_fields=["answer", "sources", "latency_ms"])
 
-        return JsonResponse({
-            "question": question,
-            "answer": answer,
-            "sources": sources,
-        })
-    
+        return JsonResponse({"question": question, "answer": answer, "sources": sources})
+
     except Exception as e:
-        # If anything breaks, record it
         latency_ms = int((time.perf_counter() - t0) * 1000)
+
         if log:
             log.error = repr(e)
             log.latency_ms = latency_ms
             log.save(update_fields=["error", "latency_ms"])
-            return JsonResponse({"error": "internal_error"}, status=500)
+
+        # ALWAYS return something (even if log wasn't created yet)
+        return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
 '''
 def simple_chunk(text: str, max_chars: int = 900):
     """Split text into roughly max_chars chunks (v1)."""
@@ -215,6 +238,9 @@ def ingest_text(request):
         return JsonResponse({"error": "No text to ingest"}, status=400)
 
     doc, created = Document.objects.get_or_create(title=title, source="ingested_text")
+
+    request.session["current_document_id"] = doc.id
+    request.session.modified = True
     
     #IF doc already exists, wipe old chunks so this is an "update"
     if not created:
@@ -289,6 +315,10 @@ def ingest_pdf(request):
         return JsonResponse({"error": "No text to ingest"}, status=400)
 
     doc, created = Document.objects.get_or_create(title=title, source="pdf")
+
+    request.session["current_document_id"] = doc.id
+    request.session.modified = True
+
     if not created:
         Chunk.objects.filter(document=doc).delete()
 
