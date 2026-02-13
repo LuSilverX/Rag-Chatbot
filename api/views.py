@@ -77,7 +77,19 @@ def ask(request):
         effective_document_id = None
         scoped = False
 
+        
+        if document_id not in (None, "", 0):
+            effective_document_id = int(document_id)
+        elif request.session.get("current_document_id"):
+            effective_document_id = int(request.session["current_document_id"])
 
+        
+        qs = Chunk.objects.exclude(embedding=None)
+
+        if effective_document_id is not None:
+            qs = qs.filter(document_id=effective_document_id)
+            scoped = True
+    
         if provided_doc_id not in (None, "", 0):
             effective_document_id = int(provided_doc_id)
         elif session_doc_id:
@@ -341,3 +353,43 @@ def ingest_pdf(request):
         "chunks_created": len(parts),
         "status": "created" if created else "updated",
     })
+
+@csrf_exempt
+def documents(request):
+    if request.method != "GET":
+        return JsonResponse({"error": "GET only"}, status=405)
+
+    limit = int(request.GET.get("limit", 20))
+    docs = Document.objects.order_by("-id")[:limit]
+
+    return JsonResponse({
+        "count": docs.count(),
+        "documents": [
+            {
+                "id": d.id,
+                "title": d.title,
+                "source": d.source,
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in docs
+        ],
+        "current_document_id": request.session.get("current_document_id"),
+    })
+
+@csrf_exempt
+def select_document(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    body = json.loads(request.body.decode("utf-8"))
+    doc_id = body.get("document_id")
+
+    if not doc_id:
+        return JsonResponse({"error": "document_id is required"}, status=400)
+    
+    #validate document exists
+    if not Document.objects.filter(id=int(doc_id)).exists():
+        return JsonResponse({"error": "Document not found"}, status=404)
+    
+    request.session["current_document_id"] = int(doc_id)
+    return JsonResponse({"current_document_id": int(doc_id), "status": "ok"})
