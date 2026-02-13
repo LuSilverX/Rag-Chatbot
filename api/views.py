@@ -58,7 +58,6 @@ def ask(request):
         body = json.loads(request.body.decode("utf-8"))
         question = (body.get("question") or "").strip()
         k = int(body.get("k", 5))
-        document_id = body.get("document_id")
 
         if not question:
             return JsonResponse({"error": "question is required"}, status=400)
@@ -69,48 +68,36 @@ def ask(request):
             "summarize", "summary", "this pdf", "the pdf", "this document", "the document"
         ])
 
-        qs = Chunk.objects.exclude(embedding=None)
-
-        provided_doc_id = body.get("document_id")
+        # Priority: body document_id > session current_document_id > latest doc (optional when doc_intent)
+        raw_doc_id = body.get("document_id")
         session_doc_id = request.session.get("current_document_id")
 
         effective_document_id = None
-        scoped = False
 
-        
-        if document_id not in (None, "", 0):
-            effective_document_id = int(document_id)
-        elif request.session.get("current_document_id"):
-            effective_document_id = int(request.session["current_document_id"])
+        if raw_doc_id not in (None, "", 0):
+            try:
+                effective_document_id = int(raw_doc_id)
+            except (TypeError, ValueError):
+                return JsonResponse({"error": "document_id must be an integer"}, status=400)
 
-        
-        qs = Chunk.objects.exclude(embedding=None)
-
-        if effective_document_id is not None:
-            qs = qs.filter(document_id=effective_document_id)
-            scoped = True
-    
-        if provided_doc_id not in (None, "", 0):
-            effective_document_id = int(provided_doc_id)
         elif session_doc_id:
             effective_document_id = int(session_doc_id)
-        elif doc_intent:
-            latest_doc = Document.objects.order_by("-id").first()
-            if latest_doc:
-                effective_document_id = latest_doc.id
-
-        if document_id not in (None, "", 0):
-            effective_document_id = int(document_id)
-            qs = qs.filter(document_id=effective_document_id)
-            scoped = True
 
         elif doc_intent:
             latest_doc = Document.objects.order_by("-id").first()
             if latest_doc:
                 effective_document_id = latest_doc.id
-                qs = qs.filter(document_id=effective_document_id)
-                scoped = True
-            # if no latest_doc, leave unscoped (search everything)
+
+        # If you want to REQUIRE a doc selection, keep this:
+        if effective_document_id is None:
+            return JsonResponse(
+                {"error": "no_document_selected", "message": "Select a document first."},
+                status=400
+            )
+
+        # Build queryset ONCE
+        qs = Chunk.objects.exclude(embedding=None).filter(document_id=effective_document_id)
+        scoped = True
 
         # 1) embed question
         q_emb = client.embeddings.create(
@@ -179,13 +166,11 @@ def ask(request):
 
     except Exception as e:
         latency_ms = int((time.perf_counter() - t0) * 1000)
-
         if log:
             log.error = repr(e)
             log.latency_ms = latency_ms
             log.save(update_fields=["error", "latency_ms"])
 
-        # ALWAYS return something (even if log wasn't created yet)
         return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
 '''
 def simple_chunk(text: str, max_chars: int = 900):
@@ -277,6 +262,7 @@ def ingest_text(request):
         "chunks_created": len(parts),
         "title": doc.title,
         "status": "created" if created else "updated",
+        "current_document_id": request.session["current_document_id"],
     })
 
 @require_GET
@@ -352,6 +338,7 @@ def ingest_pdf(request):
         "title": doc.title,
         "chunks_created": len(parts),
         "status": "created" if created else "updated",
+        "current_document_id": request.session["current_document_id"],
     })
 
 @csrf_exempt
@@ -380,12 +367,21 @@ def documents(request):
 def select_document(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
+    
+    try:
+        body = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "invalid_json"}, status=400)
 
     body = json.loads(request.body.decode("utf-8"))
     doc_id = body.get("document_id")
 
     if not doc_id:
         return JsonResponse({"error": "document_id is required"}, status=400)
+    try:
+        doc_id = int(doc_id)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "document_id must be an integer"}, status=400)
     
     #validate document exists
     if not Document.objects.filter(id=int(doc_id)).exists():
