@@ -2,57 +2,101 @@
 <html>
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>RAG MVP</title>
   <style>
-    body { font-family: system-ui, Arial; margin: 24px; max-width: 900px; }
-    .row { display: flex; gap: 16px; align-items: flex-start; }
-    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0; }
-    input, textarea, button { width: 100%; padding: 10px; margin: 6px 0; }
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, Arial; margin: 0; background: #fff; color: #111; }
+    .container { width: 100%;  max-width: none; margin: 24px 0; padding: 0 clamp(16px, 3vw, 48px); box-sizing: border-box; }
+
+    .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    .col { flex: 1; min-width: 320px; }
+
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 12px 0; background: #fff; }
+
+    input, textarea, button, select { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; }
     button { cursor: pointer; }
-    .docs button { width: auto; margin-right: 8px; }
-    pre { white-space: pre-wrap; word-wrap: break-word; background: #fafafa; padding: 10px; border-radius: 8px; }
+
+    .docs button { width: auto; margin: 6px 8px 0 0; }
+    .btnRow { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btnRow button { width: auto; }
+
+    pre { white-space: pre-wrap; word-wrap: break-word; background: #fafafa; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
     .muted { color: #666; font-size: 13px; }
     .selected { font-weight: 700; }
+
+    .dangerBtn { border: 1px solid #ffb4b4; background: #fff5f5; }
+    .dangerBtn:hover { filter: brightness(0.98); }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b0b0b; color: #f5f5f5; }
+      .card { background: #111; border-color: #2a2a2a; }
+      pre { background: #0f0f0f; border-color: #222; }
+      .muted { color: #aaa; }
+      input, textarea, button, select { background: #0f0f0f; color: #f5f5f5; border: 1px solid #2a2a2a; }
+      .dangerBtn { background: #1a0f0f; border-color: #6b2a2a; }
+    }
   </style>
 </head>
 <body>
-  <h1>RAG MVP</h1>
-  <p class="muted">Upload/ingest sets the current document in your session. Asking uses the selected doc automatically.</p>
+  <div class="container">
+    <h1>RAG MVP</h1>
+    <p class="muted">Upload/ingest sets the current document in your session. Asking uses the selected doc automatically.</p>
 
-  <div class="card">
-    <h2>Documents</h2>
-    <div id="docs" class="docs"></div>
-    <div class="muted">Current: <span id="currentDoc">none</span></div>
-    <button id="refreshDocs">Refresh documents</button>
-  </div>
-
-  <div class="row">
-    <div class="card" style="flex:1">
-      <h2>Ingest Text</h2>
-      <input id="textTitle" placeholder="Title (e.g., Mini)" />
-      <textarea id="textBody" rows="6" placeholder="Paste text here..."></textarea>
-      <button id="btnIngestText">Ingest Text</button>
-      <pre id="outIngestText"></pre>
+    <!-- TOP: Docs dashboard -->
+    <div class="card">
+      <h2>Documents</h2>
+      <div id="docs" class="docs"></div>
+      <div class="muted">Current: <span id="currentDoc">none</span></div>
+      <div class="btnRow" style="margin-top:8px;">
+        <button id="refreshDocs">Refresh documents</button>
+        <button id="btnClearDoc" class="dangerBtn">Unselect (clear session doc)</button>
+      </div>
+      <pre id="outDocs" style="display:none;"></pre>
     </div>
 
-    <div class="card" style="flex:1">
-      <h2>Ingest PDF</h2>
-      <input id="pdfTitle" placeholder="Title (optional)" />
-      <input id="pdfFile" type="file" accept="application/pdf"/>
-      <button id="btnIngestPdf">Upload PDF</button>
-      <pre id="outIngestPdf"></pre>
-    </div>
-  </div>
+    <!-- MIDDLE: Ingestion row (Text / PDF / TXT-MD) side-by-side -->
+    <div class="row">
+      <div class="card col">
+        <h2>Ingest Text</h2>
+        <input id="textTitle" placeholder="Title (e.g., Mini)" />
+        <textarea id="textBody" rows="6" placeholder="Paste text here..."></textarea>
+        <button id="btnIngestText">Ingest Text</button>
+        <pre id="outIngestText"></pre>
+      </div>
 
-  <div class="card">
-    <h2>Ask</h2>
-    <input id="question" placeholder="Ask something about the selected document..." />
-    <input id="k" type="number" value="5" min="1" max="20" />
-    <button id="btnAsk">Ask</button>
-    <h3>Answer</h3>
-    <pre id="outAnswer"></pre>
-    <h3>Sources</h3>
-    <div id="outSources"></div>
+      <div class="card col">
+        <h2>Ingest PDF</h2>
+        <input id="pdfTitle" placeholder="Title (optional)" />
+        <input id="pdfFile" type="file" accept="application/pdf"/>
+        <button id="btnIngestPdf">Upload PDF</button>
+        <pre id="outIngestPdf"></pre>
+      </div>
+
+      <div class="card col">
+        <h2>Ingest Text File (.txt/.md)</h2>
+        <input id="fileTitle" placeholder="Title (optional; defaults to filename)" />
+        <input id="textFile" type="file" accept=".txt,.md,text/plain,text/markdown" />
+        <button id="btnIngestFile">Upload Text File</button>
+        <div class="muted" id="fileMeta"></div>
+        <pre id="outIngestFile"></pre>
+      </div>
+    </div>
+
+    <!-- BOTTOM: Ask dashboard -->
+    <div class="card" style="margin-top: 18px;">
+      <h2>Ask</h2>
+      <input id="question" placeholder="Ask something about the selected document..." />
+      <label class="muted" for="k">Top-k sources to retrieve (default 5):</label>
+      <input id="k" type="number" value="5" min="1" max="20" />
+      <button id="btnAsk">Ask</button>
+
+      <h3>Answer</h3>
+      <pre id="outAnswer"></pre>
+
+      <h3>Sources</h3>
+      <div id="outSources"></div>
+    </div>
   </div>
 
 <script>
@@ -69,7 +113,7 @@
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body || {}),
     });
     const text = await r.text();
     try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
@@ -83,6 +127,16 @@
     catch { return { ok: r.ok, status: r.status, data: text }; }
   }
 
+  // Prevent HTML injection when rendering source text
+  function escapeHtml(str) {
+    return String(str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
   function renderSources(sources) {
     const wrap = $("outSources");
     wrap.innerHTML = "";
@@ -91,32 +145,39 @@
       div.className = "card";
       div.innerHTML = `
         <div><b>Source ${i+1}</b> — doc ${s.document_id}, chunk ${s.chunk_index}, distance ${Number(s.distance).toFixed(4)}</div>
-        <pre>${s.text}</pre>
+        <pre>${escapeHtml(s.text)}</pre>
       `;
       wrap.appendChild(div);
     });
   }
 
   async function refreshDocs() {
-    const res = await apiGet("/api/documents/?limit=20");
+    const res = await apiGet("/api/documents/?limit=50");
+    const out = $("outDocs");
+    out.style.display = "none";
+    out.textContent = "";
+
     if (!res.ok) {
-      $("docs").innerHTML = `<pre>Error: ${res.status}\n${JSON.stringify(res.data, null, 2)}</pre>`;
+      out.style.display = "block";
+      out.textContent = `Error: ${res.status}\n${typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2)}`;
+      $("docs").innerHTML = "";
+      $("currentDoc").textContent = "none";
       return;
     }
 
     const { documents, current_document_id } = res.data;
-    $("currentDoc").textContent = current_document_id ?? "none";
+    $("currentDoc").textContent = (current_document_id ?? "none");
 
     const docsDiv = $("docs");
     docsDiv.innerHTML = "";
 
-    documents.forEach(d => {
+    (documents || []).forEach(d => {
       const btn = document.createElement("button");
       btn.textContent = `Select #${d.id} — ${d.title} (${d.source})`;
       if (current_document_id === d.id) btn.className = "selected";
       btn.onclick = async () => {
         const sel = await apiPostJson("/api/select_document/", { document_id: d.id });
-        if (!sel.ok) alert("Select failed: " + JSON.stringify(sel.data));
+        if (!sel.ok) alert("Select failed: " + (typeof sel.data === "string" ? sel.data : JSON.stringify(sel.data)));
         await refreshDocs();
       };
       docsDiv.appendChild(btn);
@@ -125,12 +186,21 @@
 
   $("refreshDocs").onclick = refreshDocs;
 
+  // NOTE: backend endpoint assumed: /api/clear_document/
+  $("btnClearDoc").onclick = async () => {
+    const res = await apiPostJson("/api/clear_document/", {});
+    if (!res.ok) {
+      alert("Clear failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
+    }
+    await refreshDocs();
+  };
+
   $("btnIngestText").onclick = async () => {
     const title = $("textTitle").value.trim();
     const text = $("textBody").value;
 
     const res = await apiPostJson("/api/ingest_text/", { title, text });
-    $("outIngestText").textContent = JSON.stringify(res.data, null, 2);
+    $("outIngestText").textContent = (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
     await refreshDocs();
   };
 
@@ -139,13 +209,43 @@
     if (!file) { alert("Pick a PDF first"); return; }
 
     const title = $("pdfTitle").value.trim();
-
     const fd = new FormData();
     if (title) fd.append("title", title);
     fd.append("file", file);
 
     const res = await apiPostForm("/api/ingest_pdf/", fd);
-    $("outIngestPdf").textContent = JSON.stringify(res.data, null, 2);
+    $("outIngestPdf").textContent = (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
+    await refreshDocs();
+  };
+
+  // Ingest a local .txt/.md file by reading it in the browser,
+  // then sending JSON to /api/ingest_text/ (no backend change needed).
+  $("btnIngestFile").onclick = async () => {
+    const file = $("textFile").files[0];
+    if (!file) { alert("Pick a .txt or .md file first"); return; }
+
+    const maxBytes = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxBytes) {
+      alert("File is too large for MVP (max 2MB).");
+      return;
+    }
+
+    $("fileMeta").textContent = `Selected: ${file.name} (${Math.round(file.size/1024)} KB)`;
+
+    let text;
+    try {
+      text = await file.text();
+    } catch (e) {
+      $("outIngestFile").textContent = "Could not read file: " + String(e);
+      return;
+    }
+
+    const titleInput = $("fileTitle").value.trim();
+    const defaultTitle = file.name.replace(/\.[^/.]+$/, "");
+    const title = titleInput || defaultTitle;
+
+    const res = await apiPostJson("/api/ingest_text/", { title, text });
+    $("outIngestFile").textContent = (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
     await refreshDocs();
   };
 
@@ -156,7 +256,7 @@
     const res = await apiPostJson("/api/ask/", { question, k });
 
     if (!res.ok) {
-      $("outAnswer").textContent = "Error:\n" + JSON.stringify(res.data, null, 2);
+      $("outAnswer").textContent = "Error:\n" + (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
       $("outSources").innerHTML = "";
       return;
     }

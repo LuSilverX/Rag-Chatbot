@@ -627,6 +627,78 @@ def ingest_and_ask_pdf(request):
             log.latency_ms = latency_ms
             log.save(update_fields=["error", "latency_ms"])
         return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
-    
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def ingest_file(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    if "file" not in request.FILES:
+        return JsonResponse({"error": "Missing file field"}, status=400)
+
+    uploaded = request.FILES["file"]
+    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
+
+    # Basic type check (MVP)
+    filename = (uploaded.name or "").lower()
+    if not (filename.endswith(".txt") or filename.endswith(".md")):
+        return JsonResponse({"error": "Only .txt or .md supported"}, status=400)
+
+    # Read bytes -> text
+    try:
+        raw = uploaded.read()
+        text = raw.decode("utf-8", errors="ignore").strip()
+    except Exception as e:
+        return JsonResponse({"error": "Could not read file", "details": repr(e)}, status=400)
+
+    if not text:
+        return JsonResponse({"error": "Empty file"}, status=400)
+
+    # Reuse your existing ingest_text logic (copy/paste or refactor into helper)
+    parts = chunk_text(text)
+    if not parts:
+        return JsonResponse({"error": "No text to ingest"}, status=400)
+
+    doc, created = Document.objects.get_or_create(title=title, source="text_file")
+
+    request.session["current_document_id"] = doc.id
+    request.session.modified = True
+
+    if not created:
+        Chunk.objects.filter(document=doc).delete()
+
+    embs = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=parts,
+    ).data
+
+    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
+        Chunk.objects.create(
+            document=doc,
+            chunk_index=i,
+            text=chunk_str,
+            embedding=item.embedding,
+        )
+
+    return JsonResponse({
+        "document_id": doc.id,
+        "title": doc.title,
+        "chunks_created": len(parts),
+        "status": "created" if created else "updated",
+        "current_document_id": request.session["current_document_id"],
+    })
+
+@csrf_exempt
+def clear_selected_document(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    request.session.pop("current_document_id", None)
+    request.session.modified = True
+    return JsonResponse({"ok": True, "current_document_id": None})
+
 def app(request):
     return render(request, "app.html")
