@@ -5,8 +5,9 @@ from django.views.decorators.csrf import csrf_exempt
 from openai import OpenAI
 from pgvector.django import CosineDistance
 from .models import Chunk, Document, QueryLog
-import re
+from django.shortcuts import render
 from pypdf import PdfReader
+import re
 
 client = OpenAI()
 
@@ -214,48 +215,58 @@ def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
 
 @csrf_exempt
 def ingest_text(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST only"}, status=405)
+    try:
+        if request.method != "POST":
+            return JsonResponse({"error": "POST only"}, status=405)
 
-    body = json.loads(request.body.decode("utf-8"))
-    title = (body.get("title") or "Untitled").strip()
-    text = body.get("text") or ""
+        # Parse JSON safely
+        try:
+            body = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "invalid_json"}, status=400)
 
-    parts = chunk_text(text)
-    if not parts:
-        return JsonResponse({"error": "No text to ingest"}, status=400)
+        title = (body.get("title") or "Untitled").strip()
+        text = body.get("text") or ""
 
-    doc, created = Document.objects.get_or_create(title=title, source="ingested_text")
+        parts = chunk_text(text)
+        if not parts:
+            return JsonResponse({"error": "No text to ingest"}, status=400)
 
-    request.session["current_document_id"] = doc.id
-    request.session.modified = True
-    
-    #IF doc already exists, wipe old chunks so this is an "update"
-    if not created:
-        Chunk.objects.filter(document=doc).delete()
+        doc, created = Document.objects.get_or_create(title=title, source="ingested_text")
 
-    # Embed in one call (cheaper/faster than one-by-one)
-    embs = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=parts,
-    ).data
+        # Store selected/current doc in session
+        request.session["current_document_id"] = doc.id
+        request.session.modified = True
 
-    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
-        Chunk.objects.create(
-            document=doc,
-            chunk_index=i,
-            text=chunk_str,
-            embedding=item.embedding,
-        )
+        # If doc already exists, wipe old chunks so this is an "update"
+        if not created:
+            Chunk.objects.filter(document=doc).delete()
 
-    return JsonResponse({
-        "document_id": doc.id,
-        "chunks_created": len(parts),
-        "title": doc.title,
-        "status": "created" if created else "updated",
-        "current_document_id": request.session["current_document_id"],
-    })
+        # Embed in one call (cheaper/faster than one-by-one)
+        embs = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=parts,
+        ).data
 
+        for i, (chunk_str, item) in enumerate(zip(parts, embs)):
+            Chunk.objects.create(
+                document=doc,
+                chunk_index=i,
+                text=chunk_str,
+                embedding=item.embedding,
+            )
+
+        return JsonResponse({
+            "document_id": doc.id,
+            "chunks_created": len(parts),
+            "title": doc.title,
+            "status": "created" if created else "updated",
+            "current_document_id": doc.id,
+        })
+
+    except Exception as e:
+        # Always return JSON even in DEBUG, so your frontend doesn't get HTML
+        return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
 @require_GET
 def logs(request):
     limit = int(request.GET.get("limit", 20))
@@ -616,3 +627,6 @@ def ingest_and_ask_pdf(request):
             log.latency_ms = latency_ms
             log.save(update_fields=["error", "latency_ms"])
         return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
+    
+def app(request):
+    return render(request, "app.html")

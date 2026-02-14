@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>RAG MVP</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 24px; max-width: 900px; }
+    .row { display: flex; gap: 16px; align-items: flex-start; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0; }
+    input, textarea, button { width: 100%; padding: 10px; margin: 6px 0; }
+    button { cursor: pointer; }
+    .docs button { width: auto; margin-right: 8px; }
+    pre { white-space: pre-wrap; word-wrap: break-word; background: #fafafa; padding: 10px; border-radius: 8px; }
+    .muted { color: #666; font-size: 13px; }
+    .selected { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>RAG MVP</h1>
+  <p class="muted">Upload/ingest sets the current document in your session. Asking uses the selected doc automatically.</p>
+
+  <div class="card">
+    <h2>Documents</h2>
+    <div id="docs" class="docs"></div>
+    <div class="muted">Current: <span id="currentDoc">none</span></div>
+    <button id="refreshDocs">Refresh documents</button>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1">
+      <h2>Ingest Text</h2>
+      <input id="textTitle" placeholder="Title (e.g., Mini)" />
+      <textarea id="textBody" rows="6" placeholder="Paste text here..."></textarea>
+      <button id="btnIngestText">Ingest Text</button>
+      <pre id="outIngestText"></pre>
+    </div>
+
+    <div class="card" style="flex:1">
+      <h2>Ingest PDF</h2>
+      <input id="pdfTitle" placeholder="Title (optional)" />
+      <input id="pdfFile" type="file" accept="application/pdf"/>
+      <button id="btnIngestPdf">Upload PDF</button>
+      <pre id="outIngestPdf"></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ask</h2>
+    <input id="question" placeholder="Ask something about the selected document..." />
+    <input id="k" type="number" value="5" min="1" max="20" />
+    <button id="btnAsk">Ask</button>
+    <h3>Answer</h3>
+    <pre id="outAnswer"></pre>
+    <h3>Sources</h3>
+    <div id="outSources"></div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  async function apiGet(url) {
+    const r = await fetch(url);
+    const text = await r.text();
+    try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
+    catch { return { ok: r.ok, status: r.status, data: text }; }
+  }
+
+  async function apiPostJson(url, body) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
+    catch { return { ok: r.ok, status: r.status, data: text }; }
+  }
+
+  async function apiPostForm(url, formData) {
+    const r = await fetch(url, { method: "POST", body: formData });
+    const text = await r.text();
+    try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
+    catch { return { ok: r.ok, status: r.status, data: text }; }
+  }
+
+  function renderSources(sources) {
+    const wrap = $("outSources");
+    wrap.innerHTML = "";
+    (sources || []).forEach((s, i) => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div><b>Source ${i+1}</b> — doc ${s.document_id}, chunk ${s.chunk_index}, distance ${Number(s.distance).toFixed(4)}</div>
+        <pre>${s.text}</pre>
+      `;
+      wrap.appendChild(div);
+    });
+  }
+
+  async function refreshDocs() {
+    const res = await apiGet("/api/documents/?limit=20");
+    if (!res.ok) {
+      $("docs").innerHTML = `<pre>Error: ${res.status}\n${JSON.stringify(res.data, null, 2)}</pre>`;
+      return;
+    }
+
+    const { documents, current_document_id } = res.data;
+    $("currentDoc").textContent = current_document_id ?? "none";
+
+    const docsDiv = $("docs");
+    docsDiv.innerHTML = "";
+
+    documents.forEach(d => {
+      const btn = document.createElement("button");
+      btn.textContent = `Select #${d.id} — ${d.title} (${d.source})`;
+      if (current_document_id === d.id) btn.className = "selected";
+      btn.onclick = async () => {
+        const sel = await apiPostJson("/api/select_document/", { document_id: d.id });
+        if (!sel.ok) alert("Select failed: " + JSON.stringify(sel.data));
+        await refreshDocs();
+      };
+      docsDiv.appendChild(btn);
+    });
+  }
+
+  $("refreshDocs").onclick = refreshDocs;
+
+  $("btnIngestText").onclick = async () => {
+    const title = $("textTitle").value.trim();
+    const text = $("textBody").value;
+
+    const res = await apiPostJson("/api/ingest_text/", { title, text });
+    $("outIngestText").textContent = JSON.stringify(res.data, null, 2);
+    await refreshDocs();
+  };
+
+  $("btnIngestPdf").onclick = async () => {
+    const file = $("pdfFile").files[0];
+    if (!file) { alert("Pick a PDF first"); return; }
+
+    const title = $("pdfTitle").value.trim();
+
+    const fd = new FormData();
+    if (title) fd.append("title", title);
+    fd.append("file", file);
+
+    const res = await apiPostForm("/api/ingest_pdf/", fd);
+    $("outIngestPdf").textContent = JSON.stringify(res.data, null, 2);
+    await refreshDocs();
+  };
+
+  $("btnAsk").onclick = async () => {
+    const question = $("question").value.trim();
+    const k = Number($("k").value || 5);
+
+    const res = await apiPostJson("/api/ask/", { question, k });
+
+    if (!res.ok) {
+      $("outAnswer").textContent = "Error:\n" + JSON.stringify(res.data, null, 2);
+      $("outSources").innerHTML = "";
+      return;
+    }
+
+    $("outAnswer").textContent = res.data.answer || "";
+    renderSources(res.data.sources || []);
+  };
+
+  // initial load
+  refreshDocs();
+</script>
+</body>
+</html>

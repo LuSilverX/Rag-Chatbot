@@ -1,8 +1,9 @@
 from django.urls import path
 from .views import retrieve, ask, ingest_text, logs, ingest_pdf, documents 
-from .views import select_document, ingest_and_ask_text, ingest_and_ask_pdf
+from .views import select_document, ingest_and_ask_text, ingest_and_ask_pdf, app
 
 urlpatterns = [
+    path("", app, name="app"),
     path("retrieve/", retrieve),
     path("ask/", ask),
     path("ingest_text/", ingest_text),
