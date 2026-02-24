@@ -31,7 +31,7 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 ## Architecture (high-level)
 
 1. **Ingestion**
-   - Text/PDF/'.txt' → extract text → chunk → embed chunks → store chunks + vectors in Postgres
+   - Text/PDF/`.txt` → extract text → chunk → embed chunks → store chunks + vectors in Postgres
 2. **Retrieval**
    - Question → embed → cosine distance search in DB → top-k chunks
 3. **Generation**
@@ -121,6 +121,52 @@ python manage.py runserver
 
 Open:
 http://127.0.0.1:8000/ (UI)
+
+---
+
+## Quick demo (sample docs + test questions)
+
+This repo includes `sample_docs/` so you can try the app immediately after setup.
+
+### 1) Ingest a sample document
+In the UI:
+- Use **Ingest Text File (.txt/.md)** to upload:
+  - `sample_docs/demo.txt`
+  - `sample_docs/infra_notes.txt`
+  - `sample_docs/policies.txt`
+- Or upload the PDF:
+  - `sample_docs/RAG_MVP_Demo_PDF.pdf`
+
+### 2) Ask sample questions
+
+**After ingesting `demo.txt`:**
+- What is RAG?
+- List the steps of the RAG pipeline.
+- What database + extension are used for vector search?
+- What does cosine distance mean here?
+- What should the system do if sources don’t contain the answer?
+- **Guardrail test:** What year was this project founded?
+
+**After ingesting `infra_notes.txt`:**
+- Why does this project use Docker Compose?
+- What is pgvector used for?
+- What does “smaller distance” mean?
+- **Guardrail test:** What is the CEO’s name?
+
+**After ingesting `policies.txt`:**
+- How long should passwords be?
+- Is MFA required? For who?
+- Who can access production databases?
+- How far in advance should PTO be requested?
+- **Guardrail test:** What is the company’s stock ticker?
+
+**After ingesting `RAG_MVP_Demo_PDF.pdf`:**
+- Summarize this PDF briefly.
+- What are the three stages of the RAG pipeline described here?
+- What does cosine distance mean, and what does a lower distance indicate?
+- Why does chunking improve retrieval quality?
+- When should the system respond “I don’t know”?
+- **Guardrail test:** What is the author’s phone number?
 
 
 
