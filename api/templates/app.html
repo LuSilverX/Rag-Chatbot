@@ -51,6 +51,7 @@
       <div class="btnRow" style="margin-top:8px;">
         <button id="refreshDocs">Refresh documents</button>
         <button id="btnClearDoc" class="dangerBtn">Unselect (clear session doc)</button>
+        <button id="btnResetDb" class="dangerBtn">DEV: Reset DB (delete all docs)</button>
       </div>
       <pre id="outDocs" style="display:none;"></pre>
     </div>
@@ -186,12 +187,33 @@
 
   $("refreshDocs").onclick = refreshDocs;
 
-  // NOTE: backend endpoint assumed: /api/clear_document/
+  // backend endpoint assumed: /api/clear_document/
   $("btnClearDoc").onclick = async () => {
     const res = await apiPostJson("/api/clear_document/", {});
     if (!res.ok) {
       alert("Clear failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
     }
+    await refreshDocs();
+  };
+
+  // backend endpoint assumed: /api/reset_data/
+  $("btnResetDb").onclick = async () => {
+    const ok = confirm("This will DELETE ALL documents, chunks, and logs from your database.\n\nContinue?");
+    if (!ok) return;
+
+    const typed = prompt('Type RESET to confirm wiping the database:');
+    if (typed !== "RESET") {
+      alert("Canceled.");
+      return;
+    }
+
+    const res = await apiPostJson("/api/reset_data/", { confirm: "RESET" });
+    if (!res.ok) {
+      alert("Reset failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
+      return;
+    }
+
+    alert("Database reset OK.");
     await refreshDocs();
   };
 
@@ -218,8 +240,7 @@
     await refreshDocs();
   };
 
-  // Ingest a local .txt/.md file by reading it in the browser,
-  // then sending JSON to /api/ingest_text/ (no backend change needed).
+  // Reads local .txt/.md in browser, then sends JSON to /api/ingest_text/
   $("btnIngestFile").onclick = async () => {
     const file = $("textFile").files[0];
     if (!file) { alert("Pick a .txt or .md file first"); return; }

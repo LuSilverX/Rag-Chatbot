@@ -8,6 +8,7 @@ from .models import Chunk, Document, QueryLog
 from django.shortcuts import render
 from pypdf import PdfReader
 import re
+from django.conf import settings
 
 client = OpenAI()
 
@@ -702,3 +703,44 @@ def clear_selected_document(request):
 
 def app(request):
     return render(request, "app.html")
+
+@csrf_exempt
+def reset_data(request):
+    """
+    DEV ONLY: wipes all Documents, Chunks, and QueryLogs.
+    Requires DEBUG=True and a confirmation string in the request body.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    if not getattr(settings, "DEBUG", False):
+        return JsonResponse({"error": "forbidden"}, status=403)
+
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "invalid_json"}, status=400)
+
+    # require explicit confirmation to avoid accidental wipes
+    if body.get("confirm") != "RESET":
+        return JsonResponse(
+            {"error": "confirm_required", "message": 'Send {"confirm":"RESET"} to wipe all data.'},
+            status=400,
+        )
+
+    chunks_deleted, _ = Chunk.objects.all().delete()
+    docs_deleted, _ = Document.objects.all().delete()
+    logs_deleted, _ = QueryLog.objects.all().delete()
+
+    request.session.pop("current_document_id", None)
+    request.session.modified = True
+
+    return JsonResponse({
+        "ok": True,
+        "deleted": {
+            "chunks": chunks_deleted,
+            "documents": docs_deleted,
+            "query_logs": logs_deleted,
+        },
+        "current_document_id": None,
+    })
