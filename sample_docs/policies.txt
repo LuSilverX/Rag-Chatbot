@@ -1,0 +1,11 @@
+Company Policy (Demo)
+
+1) Passwords must be at least 12 characters.
+2) MFA is required for all admin accounts.
+3) Access to production databases is restricted to on-call engineers.
+4) Incidents must be documented within 24 hours.
+
+Time off:
+- PTO requests should be submitted at least 2 weeks in advance.
+- Sick days do not require advance notice.
+

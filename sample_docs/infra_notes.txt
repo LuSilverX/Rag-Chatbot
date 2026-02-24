@@ -1,0 +1,12 @@
+Infra Notes (Demo)
+
+Why Docker for the database:
+- It keeps local setup consistent across machines.
+- Postgres + pgvector can be started with one command using Docker Compose.
+- No need to manually install Postgres or the pgvector extension.
+- Data persists across restarts if Docker volumes are used.
+
+Vector search:
+- Each chunk has an embedding vector.
+- We store embeddings in pgvector and compute cosine distance during retrieval.
+- Smaller distance means the chunk is more relevant to the question.

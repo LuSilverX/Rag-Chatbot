@@ -1,0 +1,14 @@
+RAG MVP Demo Document
+
+This project demonstrates Retrieval-Augmented Generation (RAG).
+RAG works by retrieving the most relevant chunks from your documents and using them as sources for the model.
+
+Key ideas:
+- Documents are split into chunks.
+- Chunks are embedded and stored in a vector database (Postgres + pgvector).
+- A user question is embedded and compared to chunk embeddings using cosine distance.
+- The system retrieves the top-k chunks and answers using ONLY those sources.
+
+Example facts for testing:
+- The project uses Docker Compose to run Postgres + pgvector locally.
+- The API has endpoints for ingesting text and PDFs, listing documents, selecting a document, and asking questions.
