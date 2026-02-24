@@ -3,6 +3,13 @@
 A simple Retrieval-Augmented Generation (RAG) MVP built with Django and Postgres (pgvector). It lets you ingest text, PDFs, and `.txt` files into a database, embed the content into vectors, retrieve the most relevant chunks for a question, and generate an answer grounded only in those retrieved sources.
 For local development, the database runs via **Docker Compose** (Postgres + pgvector), with a non-Docker option included.
 
+## Screenshots
+
+### UI overview (documents + ingestion)
+![UI overview](assets/ui-overview.png)
+
+### Ask (answer grounded in retrieved sources)
+![Ask with sources](assets/ask-with-sources.png)
 
 This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 - ingestion (text / PDF /`.txt`)
