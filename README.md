@@ -177,6 +177,26 @@ In the UI:
 - When should the system respond “I don’t know”?
 - **Guardrail test:** What is the author’s phone number?
 
+---
+
+### Optional: one-shot API demo (ingest + ask)
+
+If you prefer testing in the terminal (or want to see the full RAG pipeline in a single request), you can use these convenience endpoints:
+
+**Ingest + Ask (text)**
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/ingest_and_ask_text/ \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Mini","text":"Cars use engines. Tires touch the road.","question":"What does it say about cars?","k":5}' | python -m json.tool
+```
+**Ingest + Ask (PDF)**
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/ingest_and_ask_pdf/ \
+  -F "file=@sample_docs/RAG_MVP_Demo_PDF.pdf" \
+  -F "question=Summarize the PDF briefly" \
+  -F "k=8" | python -m json.tool
+```
+
 
 
 
