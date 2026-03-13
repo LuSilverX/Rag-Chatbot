@@ -28,22 +28,26 @@
     .dangerBtn { border: 1px solid #ffb4b4; background: #fff5f5; }
     .dangerBtn:hover { filter: brightness(0.98); }
 
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { font-weight: 600; background: #fafafa; }
+
     @media (prefers-color-scheme: dark) {
       body { background: #0b0b0b; color: #f5f5f5; }
       .card { background: #111; border-color: #2a2a2a; }
-      pre { background: #0f0f0f; border-color: #222; }
+      pre, th { background: #0f0f0f; border-color: #222; }
       .muted { color: #aaa; }
       input, textarea, button, select { background: #0f0f0f; color: #f5f5f5; border: 1px solid #2a2a2a; }
       .dangerBtn { background: #1a0f0f; border-color: #6b2a2a; }
+      th, td { border-bottom: 1px solid #2a2a2a; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>RAG MVP</h1>
+    <h1>RAG MVP Cockpit</h1>
     <p class="muted">Upload/ingest sets the current document in your session. Asking uses the selected doc automatically.</p>
 
-    <!-- TOP: Docs dashboard -->
     <div class="card">
       <h2>Documents</h2>
       <div id="docs" class="docs"></div>
@@ -56,7 +60,6 @@
       <pre id="outDocs" style="display:none;"></pre>
     </div>
 
-    <!-- MIDDLE: Ingestion row (Text / PDF / TXT-MD) side-by-side -->
     <div class="row">
       <div class="card col">
         <h2>Ingest Text</h2>
@@ -84,20 +87,57 @@
       </div>
     </div>
 
-    <!-- BOTTOM: Ask dashboard -->
-    <div class="card" style="margin-top: 18px;">
-      <h2>Ask</h2>
-      <input id="question" placeholder="Ask something about the selected document..." />
-      <label class="muted" for="k">Top-k sources to retrieve (default 5):</label>
-      <input id="k" type="number" value="5" min="1" max="20" />
-      <button id="btnAsk">Ask</button>
+    <div class="row">
+      <div class="card col" style="flex: 2;">
+        <h2>Ask (Grounded Q&A)</h2>
+        <p class="muted">Asks the LLM a question using context from the <b>currently selected</b> document.</p>
+        <input id="question" placeholder="Ask something about the selected document..." />
+        <label class="muted" for="k">Top-k sources to retrieve (default 5):</label>
+        <input id="k" type="number" value="5" min="1" max="20" />
+        <button id="btnAsk">Ask</button>
 
-      <h3>Answer</h3>
-      <pre id="outAnswer"></pre>
+        <h3>Answer</h3>
+        <pre id="outAnswer"></pre>
 
-      <h3>Sources</h3>
-      <div id="outSources"></div>
+        <h3>Sources</h3>
+        <div id="outSources"></div>
+      </div>
+
+      <div class="card col" style="flex: 1;">
+        <h2>Vector Search Sandbox</h2>
+        <p class="muted">Performs a raw semantic search across <b>all</b> documents. Bypasses the LLM entirely.</p>
+        <input id="sandboxQuery" placeholder="Search across all chunks..." />
+        <label class="muted" for="sandboxK">Top-k chunks:</label>
+        <input id="sandboxK" type="number" value="3" min="1" max="20" />
+        <button id="btnRetrieve">Search Database</button>
+        
+        <div id="outSandbox" style="margin-top: 10px;"></div>
+      </div>
     </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+        <h2 style="margin: 0;">Query History (Logs)</h2>
+        <button id="btnRefreshLogs" style="width: auto;">Refresh History</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table id="logTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Question</th>
+              <th>Doc ID</th>
+              <th>Best Distance</th>
+              <th>Latency</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="logBody">
+            </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
 <script>
@@ -128,7 +168,6 @@
     catch { return { ok: r.ok, status: r.status, data: text }; }
   }
 
-  // Prevent HTML injection when rendering source text
   function escapeHtml(str) {
     return String(str || "")
       .replaceAll("&", "&amp;")
@@ -138,20 +177,26 @@
       .replaceAll("'", "&#039;");
   }
 
-  function renderSources(sources) {
-    const wrap = $("outSources");
+  function renderSources(sources, targetDivId) {
+    const wrap = $(targetDivId);
     wrap.innerHTML = "";
-    (sources || []).forEach((s, i) => {
+    if (!sources || sources.length === 0) {
+      wrap.innerHTML = "<p class='muted'>No relevant chunks found.</p>";
+      return;
+    }
+    sources.forEach((s, i) => {
       const div = document.createElement("div");
       div.className = "card";
+      div.style.margin = "8px 0";
       div.innerHTML = `
-        <div><b>Source ${i+1}</b> — doc ${s.document_id}, chunk ${s.chunk_index}, distance ${Number(s.distance).toFixed(4)}</div>
-        <pre>${escapeHtml(s.text)}</pre>
+        <div class="muted"><b>Doc ${s.document_id}</b> | Chunk ${s.chunk_index} | Dist: ${Number(s.distance).toFixed(4)}</div>
+        <pre style="margin-top: 6px;">${escapeHtml(s.text)}</pre>
       `;
       wrap.appendChild(div);
     });
   }
 
+  // --- DOCS LOGIC ---
   async function refreshDocs() {
     const res = await apiGet("/api/documents/?limit=50");
     const out = $("outDocs");
@@ -187,40 +232,30 @@
 
   $("refreshDocs").onclick = refreshDocs;
 
-  // backend endpoint assumed: /api/clear_document/
   $("btnClearDoc").onclick = async () => {
     const res = await apiPostJson("/api/clear_document/", {});
-    if (!res.ok) {
-      alert("Clear failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
-    }
+    if (!res.ok) alert("Clear failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
     await refreshDocs();
   };
 
-  // backend endpoint assumed: /api/reset_data/
   $("btnResetDb").onclick = async () => {
     const ok = confirm("This will DELETE ALL documents, chunks, and logs from your database.\n\nContinue?");
     if (!ok) return;
-
     const typed = prompt('Type RESET to confirm wiping the database:');
-    if (typed !== "RESET") {
-      alert("Canceled.");
-      return;
-    }
+    if (typed !== "RESET") { alert("Canceled."); return; }
 
     const res = await apiPostJson("/api/reset_data/", { confirm: "RESET" });
-    if (!res.ok) {
-      alert("Reset failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data)));
-      return;
-    }
+    if (!res.ok) { alert("Reset failed: " + (typeof res.data === "string" ? res.data : JSON.stringify(res.data))); return; }
 
     alert("Database reset OK.");
     await refreshDocs();
+    await refreshLogs();
   };
 
+  // --- INGEST LOGIC ---
   $("btnIngestText").onclick = async () => {
     const title = $("textTitle").value.trim();
     const text = $("textBody").value;
-
     const res = await apiPostJson("/api/ingest_text/", { title, text });
     $("outIngestText").textContent = (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
     await refreshDocs();
@@ -229,7 +264,6 @@
   $("btnIngestPdf").onclick = async () => {
     const file = $("pdfFile").files[0];
     if (!file) { alert("Pick a PDF first"); return; }
-
     const title = $("pdfTitle").value.trim();
     const fd = new FormData();
     if (title) fd.append("title", title);
@@ -240,54 +274,99 @@
     await refreshDocs();
   };
 
-  // Reads local .txt/.md in browser, then sends JSON to /api/ingest_text/
   $("btnIngestFile").onclick = async () => {
     const file = $("textFile").files[0];
     if (!file) { alert("Pick a .txt or .md file first"); return; }
-
-    const maxBytes = 2 * 1024 * 1024; // 2MB
-    if (file.size > maxBytes) {
-      alert("File is too large for MVP (max 2MB).");
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) { alert("File is too large for MVP (max 2MB)."); return; }
 
     $("fileMeta").textContent = `Selected: ${file.name} (${Math.round(file.size/1024)} KB)`;
-
     let text;
-    try {
-      text = await file.text();
-    } catch (e) {
-      $("outIngestFile").textContent = "Could not read file: " + String(e);
-      return;
-    }
+    try { text = await file.text(); } catch (e) { $("outIngestFile").textContent = "Could not read file: " + String(e); return; }
 
-    const titleInput = $("fileTitle").value.trim();
-    const defaultTitle = file.name.replace(/\.[^/.]+$/, "");
-    const title = titleInput || defaultTitle;
-
+    const title = $("fileTitle").value.trim() || file.name.replace(/\.[^/.]+$/, "");
     const res = await apiPostJson("/api/ingest_text/", { title, text });
     $("outIngestFile").textContent = (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
     await refreshDocs();
   };
 
+  // --- ASK & SANDBOX LOGIC ---
   $("btnAsk").onclick = async () => {
     const question = $("question").value.trim();
     const k = Number($("k").value || 5);
 
+    $("outAnswer").textContent = "Thinking...";
     const res = await apiPostJson("/api/ask/", { question, k });
 
     if (!res.ok) {
       $("outAnswer").textContent = "Error:\n" + (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2));
       $("outSources").innerHTML = "";
+    } else {
+      $("outAnswer").textContent = res.data.answer || "";
+      renderSources(res.data.sources || [], "outSources");
+    }
+    
+    // Refresh the logs table so the new query shows up instantly
+    await refreshLogs();
+  };
+
+  $("btnRetrieve").onclick = async () => {
+    const query = $("sandboxQuery").value.trim();
+    const k = Number($("sandboxK").value || 3);
+    
+    if (!query) { alert("Enter a search query."); return; }
+
+    $("outSandbox").innerHTML = "<p class='muted'>Searching database...</p>";
+    const res = await apiPostJson("/api/retrieve/", { query, k });
+
+    if (!res.ok) {
+      $("outSandbox").innerHTML = "<pre>Error:\n" + (typeof res.data === "string" ? res.data : JSON.stringify(res.data, null, 2)) + "</pre>";
+    } else {
+      renderSources(res.data.results || [], "outSandbox");
+    }
+  };
+
+  // --- LOGS LOGIC ---
+  async function refreshLogs() {
+    const res = await apiGet("/api/logs/?limit=10");
+    const body = $("logBody");
+    body.innerHTML = "";
+
+    if (!res.ok) {
+      body.innerHTML = `<tr><td colspan="6" style="padding:10px; color:red;">Failed to load logs</td></tr>`;
       return;
     }
 
-    $("outAnswer").textContent = res.data.answer || "";
-    renderSources(res.data.sources || []);
-  };
+    if (!res.data.logs || res.data.logs.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" class="muted">No queries yet.</td></tr>`;
+      return;
+    }
 
-  // initial load
-  refreshDocs();
+    res.data.logs.forEach(log => {
+      const tr = document.createElement("tr");
+      const time = new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+      const status = log.error ? "❌ Error" : (log.answer === "I don't know." ? "⚠️ IDK" : "✅ OK");
+      const dist = log.best_distance ? Number(log.best_distance).toFixed(4) : "N/A";
+      const docId = log.document_id ? log.document_id : "None";
+
+      tr.innerHTML = `
+          <td class="muted">${time}</td>
+          <td>${escapeHtml(log.question)}</td>
+          <td>${docId}</td>
+          <td>${dist}</td>
+          <td>${log.latency_ms ? log.latency_ms + 'ms' : 'N/A'}</td>
+          <td>${status}</td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  $("btnRefreshLogs").onclick = refreshLogs;
+
+  // Initial load
+  window.addEventListener('DOMContentLoaded', () => {
+    refreshDocs();
+    refreshLogs();
+  });
 </script>
 </body>
 </html>
