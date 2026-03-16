@@ -177,7 +177,7 @@ def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
     if not text:
         return []
 
-    # Split into sentence-ish units (simple, good enough for v2)
+    # Split into sentence-ish units 
     parts = [p.strip() for p in re.split(r'(?<=[.!?])\s+|\n+', text) if p.strip()]
 
     chunks = []
@@ -251,7 +251,7 @@ def ingest_text(request):
         })
 
     except Exception as e:
-        # Always return JSON even in DEBUG, so your frontend doesn't get HTML
+        # Always return JSON even in DEBUG, so frontend doesn't get HTML
         return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
 @require_GET
 def logs(request):
@@ -295,7 +295,7 @@ def ingest_pdf(request):
     if not text:
         return JsonResponse({"error": "Could not extract text from PDF"}, status=400)
 
-    # Reuse your existing ingestion logic
+    # Reuse existing ingestion logic
     parts = chunk_text(text)
     if not parts:
         return JsonResponse({"error": "No text to ingest"}, status=400)
@@ -404,7 +404,7 @@ def ingest_file(request):
     if not text:
         return JsonResponse({"error": "Empty file"}, status=400)
 
-    # Reuse your existing ingest_text logic (copy/paste or refactor into helper)
+    # Reuse existing ingest_text logic (copy/paste or refactor into helper)
     parts = chunk_text(text)
     if not parts:
         return JsonResponse({"error": "No text to ingest"}, status=400)

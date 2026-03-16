@@ -87,32 +87,30 @@
       </div>
     </div>
 
-    <div class="row">
-      <div class="card col" style="flex: 2;">
-        <h2>Ask (Grounded Q&A)</h2>
-        <p class="muted">Asks the LLM a question using context from the <b>currently selected</b> document.</p>
-        <input id="question" placeholder="Ask something about the selected document..." />
-        <label class="muted" for="k">Top-k sources to retrieve (default 5):</label>
-        <input id="k" type="number" value="5" min="1" max="20" />
-        <button id="btnAsk">Ask</button>
+    <div class="card">
+      <h2>Ask (Grounded Q&A)</h2>
+      <p class="muted">Asks the LLM a question using context from the <b>currently selected</b> document.</p>
+      <input id="question" placeholder="Ask something about the selected document..." />
+      <label class="muted" for="k">Top-k sources to retrieve (default 5):</label>
+      <input id="k" type="number" value="5" min="1" max="20" style="width: 80px; display: block;" />
+      <button id="btnAsk">Ask</button>
 
-        <h3>Answer</h3>
-        <pre id="outAnswer"></pre>
+      <h3>Answer</h3>
+      <pre id="outAnswer"></pre>
 
-        <h3>Sources</h3>
-        <div id="outSources"></div>
-      </div>
+      <h3>Sources</h3>
+      <div id="outSources"></div>
+    </div>
 
-      <div class="card col" style="flex: 1;">
-        <h2>Vector Search Sandbox</h2>
-        <p class="muted">Performs a raw semantic search across <b>all</b> documents. Bypasses the LLM entirely.</p>
-        <input id="sandboxQuery" placeholder="Search across all chunks..." />
-        <label class="muted" for="sandboxK">Top-k chunks:</label>
-        <input id="sandboxK" type="number" value="3" min="1" max="20" />
-        <button id="btnRetrieve">Search Database</button>
-        
-        <div id="outSandbox" style="margin-top: 10px;"></div>
-      </div>
+    <div class="card">
+      <h2>Vector Search Sandbox</h2>
+      <p class="muted">Performs a raw semantic search across <b>all</b> documents. Bypasses the LLM entirely.</p>
+      <input id="sandboxQuery" placeholder="Search across all chunks..." />
+      <label class="muted" for="sandboxK">Top-k chunks:</label>
+      <input id="sandboxK" type="number" value="3" min="1" max="20" style="width: 80px; display: block;" />
+      <button id="btnRetrieve">Search Database</button>
+      
+      <div id="outSandbox" style="margin-top: 10px;"></div>
     </div>
 
     <div class="card" style="margin-top: 18px;">
@@ -188,6 +186,7 @@
       const div = document.createElement("div");
       div.className = "card";
       div.style.margin = "8px 0";
+      div.style.border = "1px solid #eee";
       div.innerHTML = `
         <div class="muted"><b>Doc ${s.document_id}</b> | Chunk ${s.chunk_index} | Dist: ${Number(s.distance).toFixed(4)}</div>
         <pre style="margin-top: 6px;">${escapeHtml(s.text)}</pre>
@@ -305,7 +304,6 @@
       renderSources(res.data.sources || [], "outSources");
     }
     
-    // Refresh the logs table so the new query shows up instantly
     await refreshLogs();
   };
 
@@ -362,7 +360,6 @@
 
   $("btnRefreshLogs").onclick = refreshLogs;
 
-  // Initial load
   window.addEventListener('DOMContentLoaded', () => {
     refreshDocs();
     refreshLogs();
