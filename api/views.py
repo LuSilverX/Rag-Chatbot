@@ -62,7 +62,7 @@ def ask(request):
         if not question:
             return JsonResponse({"error": "question is required"}, status=400)
 
-        # Determine doc intent (optional fallback to latest doc)
+        # Determining doc intent 
         q = question.lower()
         doc_intent = any(p in q for p in [
             "summarize", "summary", "this pdf", "the pdf", "this document", "the document"
@@ -105,7 +105,6 @@ def ask(request):
               .order_by("distance")[:k]
         )
 
-        scoped = True
         max_distance = float(body.get("max_distance", 0.95))  # scoped default
 
         best = chunks[0] if chunks else None
@@ -168,7 +167,6 @@ def ask(request):
 
 def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
     """
-    v2 chunker:
     - splits on sentences/paragraphs
     - packs into chunks up to max_chars
     - overlaps last 'overlap' chars between chunks
@@ -190,7 +188,6 @@ def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
             buf = f"{buf} {p}"
         else:
             chunks.append(buf.strip())
-            # start next buffer with overlap from previous chunk
             tail = buf[-overlap:] if overlap > 0 else ""
             buf = f"{tail} {p}".strip()
 
@@ -205,7 +202,7 @@ def ingest_text(request):
         if request.method != "POST":
             return JsonResponse({"error": "POST only"}, status=405)
 
-        # Parse JSON safely
+        # Parsing JSON safely
         try:
             body = json.loads(request.body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
@@ -228,7 +225,7 @@ def ingest_text(request):
         if not created:
             Chunk.objects.filter(document=doc).delete()
 
-        # Embed in one call (cheaper/faster than one-by-one)
+        # Embedding in one call (cheaper/faster than one-by-one)
         embs = client.embeddings.create(
             model="text-embedding-3-small",
             input=parts,
@@ -251,32 +248,7 @@ def ingest_text(request):
         })
 
     except Exception as e:
-        # Always return JSON even in DEBUG, so frontend doesn't get HTML
         return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
-@require_GET
-def logs(request):
-    limit = int(request.GET.get("limit", 20))
-    limit = max(1, min(limit, 100)) 
-
-    rows = QueryLog.objects.order_by("-id")[:limit]
-
-    return JsonResponse({
-        "count": rows.count(),
-        "logs": [
-            {
-                "id": r.id,
-                "created_at": r.created_at.isoformat(),
-                "question": r.question,
-                "k": r.k,
-                "document_id": r.document_id,
-                "max_distance": r.max_distance,
-                "best_distance": r.best_distance,
-                "error": r.error,
-                "latency_ms": r.latency_ms,
-            }
-            for r in rows
-        ]
-    })
 
 @csrf_exempt
 def ingest_pdf(request):
@@ -295,12 +267,70 @@ def ingest_pdf(request):
     if not text:
         return JsonResponse({"error": "Could not extract text from PDF"}, status=400)
 
-    # Reuse existing ingestion logic
     parts = chunk_text(text)
     if not parts:
         return JsonResponse({"error": "No text to ingest"}, status=400)
 
     doc, created = Document.objects.get_or_create(title=title, source="pdf")
+
+    request.session["current_document_id"] = doc.id
+    request.session.modified = True
+
+    if not created:
+        Chunk.objects.filter(document=doc).delete()
+
+    embs = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=parts,
+    ).data
+
+    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
+        Chunk.objects.create(
+            document=doc,
+            chunk_index=i,
+            text=chunk_str,
+            embedding=item.embedding,
+        )
+
+    return JsonResponse({
+        "document_id": doc.id,
+        "title": doc.title,
+        "chunks_created": len(parts),
+        "status": "created" if created else "updated",
+        "current_document_id": request.session["current_document_id"],
+    })
+
+@csrf_exempt
+def ingest_file(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    if "file" not in request.FILES:
+        return JsonResponse({"error": "Missing file field"}, status=400)
+
+    uploaded = request.FILES["file"]
+    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
+
+    # Basic type check (MVP)
+    filename = (uploaded.name or "").lower()
+    if not (filename.endswith(".txt") or filename.endswith(".md")):
+        return JsonResponse({"error": "Only .txt or .md supported"}, status=400)
+
+    # Read bytes -> text
+    try:
+        raw = uploaded.read()
+        text = raw.decode("utf-8", errors="ignore").strip()
+    except Exception as e:
+        return JsonResponse({"error": "Could not read file", "details": repr(e)}, status=400)
+
+    if not text:
+        return JsonResponse({"error": "Empty file"}, status=400)
+
+    parts = chunk_text(text)
+    if not parts:
+        return JsonResponse({"error": "No text to ingest"}, status=400)
+
+    doc, created = Document.objects.get_or_create(title=title, source="text_file")
 
     request.session["current_document_id"] = doc.id
     request.session.modified = True
@@ -379,66 +409,6 @@ def select_document(request):
     return JsonResponse({"current_document_id": int(doc_id), "status": "ok"})
 
 @csrf_exempt
-def ingest_file(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "POST only"}, status=405)
-
-    if "file" not in request.FILES:
-        return JsonResponse({"error": "Missing file field"}, status=400)
-
-    uploaded = request.FILES["file"]
-    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
-
-    # Basic type check (MVP)
-    filename = (uploaded.name or "").lower()
-    if not (filename.endswith(".txt") or filename.endswith(".md")):
-        return JsonResponse({"error": "Only .txt or .md supported"}, status=400)
-
-    # Read bytes -> text
-    try:
-        raw = uploaded.read()
-        text = raw.decode("utf-8", errors="ignore").strip()
-    except Exception as e:
-        return JsonResponse({"error": "Could not read file", "details": repr(e)}, status=400)
-
-    if not text:
-        return JsonResponse({"error": "Empty file"}, status=400)
-
-    # Reuse existing ingest_text logic (copy/paste or refactor into helper)
-    parts = chunk_text(text)
-    if not parts:
-        return JsonResponse({"error": "No text to ingest"}, status=400)
-
-    doc, created = Document.objects.get_or_create(title=title, source="text_file")
-
-    request.session["current_document_id"] = doc.id
-    request.session.modified = True
-
-    if not created:
-        Chunk.objects.filter(document=doc).delete()
-
-    embs = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=parts,
-    ).data
-
-    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
-        Chunk.objects.create(
-            document=doc,
-            chunk_index=i,
-            text=chunk_str,
-            embedding=item.embedding,
-        )
-
-    return JsonResponse({
-        "document_id": doc.id,
-        "title": doc.title,
-        "chunks_created": len(parts),
-        "status": "created" if created else "updated",
-        "current_document_id": request.session["current_document_id"],
-    })
-
-@csrf_exempt
 def clear_selected_document(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
@@ -489,4 +459,29 @@ def reset_data(request):
             "query_logs": logs_deleted,
         },
         "current_document_id": None,
+    })
+
+@require_GET
+def logs(request):
+    limit = int(request.GET.get("limit", 20))
+    limit = max(1, min(limit, 100)) 
+
+    rows = QueryLog.objects.order_by("-id")[:limit]
+
+    return JsonResponse({
+        "count": rows.count(),
+        "logs": [
+            {
+                "id": r.id,
+                "created_at": r.created_at.isoformat(),
+                "question": r.question,
+                "k": r.k,
+                "document_id": r.document_id,
+                "max_distance": r.max_distance,
+                "best_distance": r.best_distance,
+                "error": r.error,
+                "latency_ms": r.latency_ms,
+            }
+            for r in rows
+        ]
     })
