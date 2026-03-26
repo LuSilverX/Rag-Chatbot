@@ -390,8 +390,7 @@ def select_document(request):
         body = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
         return JsonResponse({"error": "invalid_json"}, status=400)
-
-    body = json.loads(request.body.decode("utf-8"))
+    
     doc_id = body.get("document_id")
 
     if not doc_id:
@@ -401,12 +400,12 @@ def select_document(request):
     except (TypeError, ValueError):
         return JsonResponse({"error": "document_id must be an integer"}, status=400)
     
-    #validate document exists
-    if not Document.objects.filter(id=int(doc_id)).exists():
+    #validating document exists
+    if not Document.objects.filter(id=doc_id).exists():
         return JsonResponse({"error": "Document not found"}, status=404)
     
-    request.session["current_document_id"] = int(doc_id)
-    return JsonResponse({"current_document_id": int(doc_id), "status": "ok"})
+    request.session["current_document_id"] = doc_id
+    return JsonResponse({"current_document_id": doc_id, "status": "ok"})
 
 @csrf_exempt
 def clear_selected_document(request):
