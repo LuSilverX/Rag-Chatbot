@@ -81,3 +81,69 @@ class ApiIntegrationTests(TestCase):
 
         # Did it set the session correctly?
         self.assertEqual(self.client.session.get("current_document_id"), saved_doc.id)
+
+    @patch('api.views.client.responses.create') 
+    @patch('api.views.client.embeddings.create')
+    def test_ask_endpoint(self, mock_embeddings_create, mock_responses_create):
+        """
+        Tests the /api/ask/ endpoint.
+        Ensures vector retrieval works, the LLM is called, and the QueryLog is saved.
+        """
+        
+        # Need a document and a chunk in the database to actually "search" against
+        doc = Document.objects.create(title="Test Knowledge Base")
+        
+        # Gives the chunk an embedding of straight 0.1s
+        chunk_vector = [0.1] * 1536 
+        Chunk.objects.create(
+            document=doc,
+            chunk_index=0,
+            text="The secret password is 'Pineapple'.",
+            embedding=chunk_vector
+        )
+
+        # Force the test client's session to have this document selected
+        session = self.client.session
+        session["current_document_id"] = doc.id
+        session.save()
+        
+        # Makes the question's vector EXACTLY match the chunk's vector so the distance is 0.0
+        mock_emb_item = MagicMock()
+        mock_emb_item.embedding = [0.1] * 1536 
+        mock_embeddings_create.return_value.data = [mock_emb_item]
+
+        # Fakes what GPT-4 would say after reading the chunk
+        mock_responses_create.return_value.output_text = "The secret password is Pineapple."
+
+        # Firing the request
+        payload = {
+            "question": "What is the secret password?",
+            "k": 1
+        }
+        
+        response = self.client.post(
+            '/api/ask/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+
+        # Checking the response
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        
+        # Did the LLM return the mocked answer?
+        self.assertEqual(data["answer"], "The secret password is Pineapple.")
+        
+        # Did the vector search find the source chunk?
+        self.assertEqual(len(data["sources"]), 1)
+        self.assertEqual(data["sources"][0]["text"], "The secret password is 'Pineapple'.")
+        
+        # Did the distance calculation work? (Should be very close to 0.0 since the vectors match)
+        self.assertTrue(data["sources"][0]["distance"] < 0.01)
+
+        # Did it log the query for the analytics?
+        from .models import QueryLog 
+        self.assertEqual(QueryLog.objects.count(), 1)
+        log = QueryLog.objects.first()
+        self.assertEqual(log.question, "What is the secret password?")
+        self.assertEqual(log.answer, "The secret password is Pineapple.")
