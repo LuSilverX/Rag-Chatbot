@@ -1,14 +1,14 @@
 # RAG MVP (Django + pgvector)
 
-A simple Retrieval-Augmented Generation (RAG) MVP built with Django and Postgres (pgvector). It lets you ingest text, PDFs, and `.txt` files into a database, embed the content into vectors, retrieve the most relevant chunks for a question, and generate an answer grounded only in those retrieved sources.
+A local Retrieval-Augmented Generation (RAG) MVP built with Django and Postgres (pgvector). It lets you ingest text, text-based PDFs, and `.txt`/`.md` files, store their embeddings, retrieve relevant chunks, and ask an AI model to answer using those sources.
 For local development, the database runs via **Docker Compose** (Postgres + pgvector), with a non-Docker option included.
 
 This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
-- ingestion (text / PDF /`.txt`)
+- ingestion (text / text-based PDF / `.txt` / `.md`)
 - chunking
 - embeddings storage (Postgres + pgvector)
 - similarity search (cosine distance)
-- grounded answering with citations/sources
+- source-guided answering with retrieved source chunks
 - a minimal web UI to test the system end-to-end
 
 ---
@@ -16,14 +16,14 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 ## Features
 
 - **Ingest text** (title + body)
-- **Ingest PDFs** (multipart upload; extract text then chunk)
-- **Ingest `.txt` files** (multipart upload; extract text then chunk)
+- **Ingest text-based PDFs** (multipart upload; extract text then chunk; no OCR)
+- **Ingest `.txt` and `.md` files** (multipart upload; decode as text then chunk)
 - **Vector search with pgvector** (Cosine distance in Postgres)
-- **RAG answering** (LLM answers using *only* retrieved chunks)
+- **RAG answering** (LLM is instructed to use only retrieved chunks; responses include sources)
 - **“I don’t know” guardrail** when similarity is too low
 - **Document selection** stored in session (`current_document_id`)
 - **Query logging** for debugging (latency, best distance, sources, errors)
-- Optional “convenience” endpoints: **ingest + ask** in one call
+- Separate ingestion and question-answering endpoints
 
 ---
 
@@ -40,11 +40,11 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 ## Architecture (high-level)
 
 1. **Ingestion**
-   - `Text/PDF/.txt` → extract text → chunk → embed chunks → store chunks + vectors in Postgres
+   - `Text/PDF/.txt/.md` → extract text → chunk → embed chunks → store chunks + vectors in Postgres
 2. **Retrieval**
-   - Question → embed → cosine distance search in DB → top-k chunks
+   - Question → embed → cosine distance search within the selected document → top-k chunks
 3. **Generation**
-   - Send retrieved chunks as “Sources” → model answers using *only* sources
+   - Send retrieved chunks as “Sources” → instruct the model to answer using only those sources
 4. **Response**
    - Return `answer` + `sources` (doc id, chunk index, distance, chunk text)
 
@@ -52,52 +52,57 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 
 ## Tech stack
 
-- Python + Django
+- Python 3.12+ + Django 6.0 (tested locally with Python 3.13)
 - Postgres + **pgvector**
 - **Docker + Docker Compose** (local Postgres + pgvector dev environment)
-- OpenAI embeddings + chat model
+- OpenAI `text-embedding-3-small` embeddings + `gpt-4.1-mini` answering model
 - Minimal HTML/JS UI (fetch-based)
 
 ---
 
 ## Setup
 
+Prerequisites: Python 3.12 or newer, Git, Docker Desktop (or Docker Engine with Compose), and an OpenAI API key with access to the configured models. Ingestion and answering make billable API calls. The commands below use a macOS/Linux shell and Python 3.13.
+
 ### 1) Clone repo & create venv
 
 ```bash
-git clone git@github.com:LuSilverX/Rag-Chatbot.git
+git clone https://github.com/LuSilverX/Rag-Chatbot.git rag-chatbot
 cd rag-chatbot
 
-python -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
 ### 2) Install dependencies
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 ### 3) Configure environment variables
-Create a .env file (or export env vars in your shell):
+Create a `.env` file in the project root:
 
-```bash
-export OPENAI_API_KEY="your_key_here"
+```dotenv
+OPENAI_API_KEY="your_key_here"
 ```
-If you use .env, make sure your Django settings load it (e.g., with python-dotenv).
+`manage.py` already loads `.env` with python-dotenv. Alternatively, export `OPENAI_API_KEY` in your shell. The `.env` file is excluded from Git. Other entry points, such as a production WSGI/ASGI server, need environment variables supplied separately.
 
 ### 4) Start Postgres + pgvector (Docker)
-This project uses Docker Compose to run Postgres with the pgvector extension locally.
+Open Docker Desktop and wait until its engine is running (or start your Docker Engine service). Then run this from the project folder to start PostgreSQL 16 with pgvector:
 
 ```bash
 docker compose up -d
 ```
 
- **Option B: Local Postgres (no Docker)** 
-Example (once Postgres is installed and running):
+The container is named `rag_pg`. Django connects to `ragdb` at `127.0.0.1:5432` using the local development credentials in `docker-compose.yml` and `config/settings.py`. Database contents persist in the Compose-managed `pgdata` volume when the container stops.
+
+**Option B: Local Postgres (no Docker)**
+
+Install and start PostgreSQL, and install the pgvector extension files for that PostgreSQL version. Using a PostgreSQL administrator account, create the application role first, then a database owned by that role:
 
 ```bash
-createdb ragdb
 createuser raguser --pwprompt
+createdb --owner=raguser ragdb
 psql -d ragdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 Update your Django DATABASES config (example):
@@ -118,9 +123,10 @@ DATABASES = {
 ### 5) Run migrations
 
 ```bash
-python manage.py makemigrations
 python manage.py migrate
 ```
+
+Migrations are already included in the repository. Use `makemigrations` only when developing model changes.
 
 ### 6) Run the server
 
@@ -130,6 +136,10 @@ python manage.py runserver
 
 Open:
 http://127.0.0.1:8000/ (UI)
+
+Keep the terminal open; press **Control+C** to stop Django. If port 8000 is occupied, use `python manage.py runserver 8001` and open http://127.0.0.1:8001/ instead. Update the port in API examples accordingly.
+
+For later sessions, start Docker, run `docker compose up -d`, activate `.venv`, and start Django. If you move the project folder, recreate `.venv` and reinstall dependencies because virtual environments contain absolute paths.
 
 ---
 
@@ -179,25 +189,39 @@ In the UI:
 
 ---
 
-### Optional: one-shot API demo (ingest + ask)
+### Optional: API demo (ingest, then ask)
 
-If you prefer testing in the terminal (or want to see the full RAG pipeline in a single request), you can use these convenience endpoints:
+Ingestion and answering are separate requests. These examples save the session cookie so `/api/ask/` uses the document selected by ingestion. Alternatively, pass the returned `document_id` explicitly in the question JSON.
 
-**Ingest + Ask (text)**
+**Ingest text**
 ```bash
-curl -sS -X POST http://127.0.0.1:8000/api/ingest_and_ask_text/ \
+curl -sS -c /tmp/rag-demo-cookies.txt -X POST http://127.0.0.1:8000/api/ingest_text/ \
   -H "Content-Type: application/json" \
-  -d '{"title":"Mini","text":"Cars use engines. Tires touch the road.","question":"What does it say about cars?","k":5}' | python -m json.tool
+  -d '{"title":"Mini","text":"Cars use engines. Tires touch the road."}' | python -m json.tool
 ```
-**Ingest + Ask (PDF)**
+
+**Ask about the ingested document**
 ```bash
-curl -sS -X POST http://127.0.0.1:8000/api/ingest_and_ask_pdf/ \
-  -F "file=@sample_docs/RAG_MVP_Demo_PDF.pdf" \
-  -F "question=Summarize the PDF briefly" \
-  -F "k=8" | python -m json.tool
+curl -sS -b /tmp/rag-demo-cookies.txt -X POST http://127.0.0.1:8000/api/ask/ \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What does it say about cars?","k":5}' | python -m json.tool
 ```
 
+**Ingest a PDF, then ask about it**
+```bash
+curl -sS -c /tmp/rag-demo-cookies.txt -X POST http://127.0.0.1:8000/api/ingest_pdf/ \
+  -F "file=@sample_docs/RAG_MVP_Demo_PDF.pdf" | python -m json.tool
 
+curl -sS -b /tmp/rag-demo-cookies.txt -X POST http://127.0.0.1:8000/api/ask/ \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Summarize this PDF briefly.","k":8}' | python -m json.tool
+```
 
+## Current limitations
 
-
+- PDF ingestion requires extractable text; scanned/image-only PDFs need OCR elsewhere first.
+- The model is instructed to stay within the sources, but this does not guarantee factual answers or inline citations. Check the returned source chunks.
+- `/api/ask/` searches one document at a time. It uses an explicit `document_id`, then the session selection, or the latest document for certain document-summary questions. The separate `/api/retrieve/` endpoint searches across documents.
+- The distance guardrail returns “I don't know” when no chunks are found or the best cosine distance exceeds `max_distance` (default `0.95`). This threshold does not guarantee that every unsupported question will be rejected.
+- Re-ingesting the same title and source type replaces that document's chunks. Ingestion is not atomic, so an embedding failure during replacement can leave the document without its previous chunks.
+- This is a local development demo: debug mode, development credentials, and unauthenticated API endpoints require changes before public deployment.
