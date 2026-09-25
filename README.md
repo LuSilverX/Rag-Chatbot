@@ -1,6 +1,6 @@
-# RAG MVP (Django + pgvector)
+# Document Q&A (Django + pgvector)
 
-A local Retrieval-Augmented Generation (RAG) MVP built with Django and Postgres (pgvector). It lets you ingest text, text-based PDFs, and `.txt`/`.md` files, store their embeddings, retrieve relevant chunks, and ask an AI model to answer using those sources.
+A local document Q&A portfolio application built with Django and Postgres (pgvector). It lets you ingest text, text-based PDFs, and `.txt`/`.md` files, store their embeddings, retrieve relevant chunks, and ask an AI model to answer using those sources.
 For local development, the database runs via **Docker Compose** (Postgres + pgvector), with a non-Docker option included.
 
 This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
@@ -9,7 +9,7 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 - embeddings storage (Postgres + pgvector)
 - similarity search (cosine distance)
 - source-guided answering with retrieved source chunks
-- a minimal web UI to test the system end-to-end
+- a document-first web UI with source passages and collapsible developer tools
 
 ---
 
@@ -30,6 +30,8 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 ## Screenshots
 
 ### UI overview (documents + ingestion)
+
+The images below show the original developer cockpit. The current interface puts document selection and Q&A first; diagnostics are under **Developer tools**.
 ![UI overview](assets/ui-overview.png)
 
 ### Ask (answer grounded in retrieved sources)
@@ -148,8 +150,8 @@ For later sessions, start Docker, run `docker compose up -d`, activate `.venv`, 
 This repo includes `sample_docs/` so you can try the app immediately after setup.
 
 ### 1) Ingest a sample document
-In the UI:
-- Use **Ingest Text File (.txt/.md)** to upload:
+In the UI, expand **Add a document** and use **Upload document**:
+- Upload a text file:
   - `sample_docs/demo.txt`
   - `sample_docs/infra_notes.txt`
   - `sample_docs/policies.txt`
@@ -217,11 +219,40 @@ curl -sS -b /tmp/rag-demo-cookies.txt -X POST http://127.0.0.1:8000/api/ask/ \
   -d '{"question":"Summarize this PDF briefly.","k":8}' | python -m json.tool
 ```
 
+## Verification and evaluation
+
+Run the regression tests (Postgres must be running):
+
+```bash
+python manage.py test --noinput
+```
+
+Tests use mocked AI calls and an isolated test database. They cover atomic updates, embedding/write failures, bounded chunking, invalid inputs, upload validation, document scoping, abstention and history status.
+
+Run the live 20-question evaluation:
+
+```bash
+python manage.py evaluate_rag
+```
+
+This sends only the synthetic museum fixture in `evaluations/cases.json` to OpenAI and makes billable API calls. It creates temporary evaluation records inside a transaction and rolls them back, preserving existing documents and logs. It writes answers, source passages, distances, latency and scoring results to `evaluations/latest.json`. A failed answer or evidence check makes the command exit unsuccessfully.
+
+The recorded run passed **20/20 answer checks**, including **12/12 supported answers**, **8/8 unsupported-question abstentions**, and **12/12 expected-evidence retrieval checks**. Median latency was **1,219 ms**. See [evaluation details](evaluations/README.md) for the rubric and limits. Results are a small synthetic demonstration, not a general accuracy guarantee.
+
+## Interface and input behavior
+
+- Select a document by name, then ask a question. Each question is independent; this application does not maintain conversational memory.
+- Expand **Add a document** to paste text or upload a PDF, TXT or Markdown file. Text files use the dedicated file-upload endpoint.
+- **Developer tools** contains retrieval settings, raw ingestion responses, vector search, history and the existing reset control.
+- Uploads and pasted text are limited to 2 MB. Chunks contain at most 900 characters, with up to 200 characters of overlap and sentence/word boundaries preferred.
+- Invalid JSON, unsupported files, corrupt PDFs and invalid numeric parameters return readable validation errors. AI failures return a retryable service error; network failures restore the interface controls.
+- History distinguishes **Answered**, **Unanswered** and **Error** and preserves zero-valued distance/latency readings.
+
 ## Current limitations
 
 - PDF ingestion requires extractable text; scanned/image-only PDFs need OCR elsewhere first.
 - The model is instructed to stay within the sources, but this does not guarantee factual answers or inline citations. Check the returned source chunks.
 - `/api/ask/` searches one document at a time. It uses an explicit `document_id`, then the session selection, or the latest document for certain document-summary questions. The separate `/api/retrieve/` endpoint searches across documents.
 - The distance guardrail returns “I don't know” when no chunks are found or the best cosine distance exceeds `max_distance` (default `0.95`). This threshold does not guarantee that every unsupported question will be rejected.
-- Re-ingesting the same title and source type replaces that document's chunks. Ingestion is not atomic, so an embedding failure during replacement can leave the document without its previous chunks.
+- Re-ingesting the same title and source type replaces that document's chunks. Replacement embeddings are generated first; database replacement is atomic, so embedding or database-write failures preserve the previous chunks. Concurrent first-time uploads with identical titles are not deduplicated by a database constraint.
 - This is a local development demo: debug mode, development credentials, and unauthenticated API endpoints require changes before public deployment.

@@ -1,0 +1,605 @@
+{
+  "recorded_at": "2026-09-25T01:55:21.756409+00:00",
+  "models": {
+    "embeddings": "text-embedding-3-small",
+    "answers": "gpt-4.1-mini"
+  },
+  "fixture": "cases.json",
+  "chunks_created": 4,
+  "k": 3,
+  "max_distance": 0.95,
+  "method": "Deterministic expected-fact regex checks and exact abstention checks; inspect recorded answers for semantic correctness. This small synthetic set is not a general accuracy benchmark.",
+  "summary": {
+    "questions": 20,
+    "answer_checks_passed": 20,
+    "supported_answers_passed": 12,
+    "supported_questions": 12,
+    "unsupported_abstentions_passed": 8,
+    "unsupported_questions": 8,
+    "evidence_retrieved": 12,
+    "median_latency_ms": 1219,
+    "max_latency_ms": 3921
+  },
+  "results": [
+    {
+      "id": "hours",
+      "question": "What time does Harbor Museum open and close?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM and is closed on Mondays.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1565,
+      "best_distance": 0.2776853002772226,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.2776853002772226
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.49704914641065434
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5609502703895711
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "closed",
+      "question": "Which day is the museum closed?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The Harbor Museum is closed on Mondays.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 3921,
+      "best_distance": 0.43690335009695425,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.43690335009695425
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5258283059488461
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.5308977692551752
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "price",
+      "question": "How much is standard admission?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "Standard admission costs 12 dollars. Children under six enter free. (source 1)",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1756,
+      "best_distance": 0.586361912570307,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.586361912570307
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.7052043765880113
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.7158294966441718
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "children",
+      "question": "Which children can enter free?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "Children under six can enter free.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1104,
+      "best_distance": 0.6841947271649389,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.6841947271649389
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.7298856683643407
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.7435177919068234
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "exhibit",
+      "question": "What is the signature exhibit called?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The signature exhibit is called the Moonstone Compass.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1533,
+      "best_distance": 0.5296927715579196,
+      "sources": [
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.5296927715579196
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.5930782308061842
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.6113171606724421
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "gallery",
+      "question": "Where is the Moonstone Compass displayed?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The Moonstone Compass is displayed in Gallery Two.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1015,
+      "best_distance": 0.362741839650496,
+      "sources": [
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.362741839650496
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.5641562035317382
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.653245351470142
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "demo",
+      "question": "When does the compass demonstration begin?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The compass demonstration begins at 2 PM each open day.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1770,
+      "best_distance": 0.43985528375533145,
+      "sources": [
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.43985528375533145
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.5737196991672322
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.6005355358515096
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "photos",
+      "question": "Is photography allowed in the permanent galleries?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "Photography without flash is allowed in the permanent galleries.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1369,
+      "best_distance": 0.5407969795871019,
+      "sources": [
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.5407969795871019
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.5484021988721255
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5532371468958923
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "cafe",
+      "question": "What are the cafe's lunch hours?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The cafe's lunch hours are from noon to 3 PM.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1334,
+      "best_distance": 0.5272506061715382,
+      "sources": [
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5272506061715382
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.6529399885292118
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.6857858731623429
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "lockers",
+      "question": "Do the lockers cost money, and where are they?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. (source 1)",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1476,
+      "best_distance": 0.6494397831228305,
+      "sources": [
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.6494397831228305
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.7083536470823677
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.7374437951999857
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "access",
+      "question": "Which entrance provides wheelchair access?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The east entrance provides wheelchair access.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1368,
+      "best_distance": 0.5089270146392236,
+      "sources": [
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.5089270146392236
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.6151739963844244
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.7048781194530948
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "quiet",
+      "question": "When is the quiet visiting hour?",
+      "unanswerable": false,
+      "http_status": 200,
+      "answer": "The quiet visiting hour is from 10 AM to 11 AM on Thursdays.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": true,
+      "latency_ms": 1230,
+      "best_distance": 0.47658185615110127,
+      "sources": [
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.47658185615110127
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5733185810432501
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.6418649828679037
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "founder",
+      "question": "Who founded Harbor Museum?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 1168,
+      "best_distance": 0.4350588481053772,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.4350588481053772
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.6549689779653722
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.7549085382933252
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "year",
+      "question": "In what year did the museum open for the first time?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 971,
+      "best_distance": 0.5548228486486173,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.5548228486486173
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.6248409319316021
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.6452853415375314
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "phone",
+      "question": "What is the museum's telephone number?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 1026,
+      "best_distance": 0.489149565202332,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.489149565202332
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.5412377073062475
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.5551713355316348
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "director",
+      "question": "What is the director's name?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 1102,
+      "best_distance": 0.8476647589428311,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.8476647589428311
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.8596715096852743
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.8616648022783985
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "parking",
+      "question": "How much does parking at the museum cost?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 893,
+      "best_distance": 0.44019191432847804,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.44019191432847804
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.5591153224624128
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.5700368846630954
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "attendance",
+      "question": "How many people visited the museum last year?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 998,
+      "best_distance": 0.5638681851956795,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.5638681851956795
+        },
+        {
+          "chunk_index": 3,
+          "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
+          "distance": 0.609850821375672
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.6376037332265991
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "stock",
+      "question": "What is the museum's stock ticker?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 973,
+      "best_distance": 0.56611950647337,
+      "sources": [
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.56611950647337
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.6294673249699081
+        },
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.6739149182525785
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "capital",
+      "question": "What is the capital of France?",
+      "unanswerable": true,
+      "http_status": 200,
+      "answer": "I don't know.",
+      "answer_check_passed": true,
+      "expected_evidence_retrieved": null,
+      "latency_ms": 1208,
+      "best_distance": 0.9090117956343344,
+      "sources": [
+        {
+          "chunk_index": 2,
+          "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
+          "distance": 0.9090117956343344
+        },
+        {
+          "chunk_index": 1,
+          "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
+          "distance": 0.9288921580614198
+        },
+        {
+          "chunk_index": 0,
+          "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
+          "distance": 0.9317361640620142
+        }
+      ],
+      "error": null
+    }
+  ]
+}
