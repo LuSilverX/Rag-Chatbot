@@ -29,13 +29,17 @@ This project is meant as a portfolio-ready demonstration of a real RAG pipeline:
 
 ## Screenshots
 
-### UI overview (documents + ingestion)
+### Document selection and Q&A
 
-The images below show the original developer cockpit. The current interface puts document selection and Q&A first; diagnostics are under **Developer tools**.
-![UI overview](assets/ui-overview.png)
+Choose a document by name, add files or pasted text, and ask a question. Diagnostics are available under **Developer tools**.
 
-### Ask (answer grounded in retrieved sources)
-![Ask with sources](assets/ask-with-sources.png)
+![Current Document Q&A interface with a selected document and question input](assets/ui-overview.png)
+
+### Answer with supporting sources
+
+A live answer from the synthetic Harbor Museum demo, with its supporting passage expanded.
+
+![Answer about museum hours and admission with the supporting source passage](assets/ask-with-sources.png)
 
 ---
 
