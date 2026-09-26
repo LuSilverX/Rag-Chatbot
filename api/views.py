@@ -1,5 +1,12 @@
 from django.views.decorators.http import require_GET
-import json, time
+import json
+import time
+import logging
+import math
+from functools import wraps
+from django.db import transaction
+from django.core.exceptions import RequestDataTooBig
+from openai import OpenAIError
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from openai import OpenAI
@@ -10,16 +17,86 @@ from pypdf import PdfReader
 import re
 from django.conf import settings
 
-client = OpenAI()
+client = OpenAI(timeout=45.0, max_retries=0)
+logger = logging.getLogger(__name__)
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+
+
+class InvalidInput(ValueError):
+    pass
+
+
+def api_errors(view):
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        try:
+            return view(request, *args, **kwargs)
+        except RequestDataTooBig:
+            return JsonResponse({"error": "invalid_input", "message": "The request is too large. Text and files must be at most 2 MB."}, status=400)
+        except InvalidInput as exc:
+            return JsonResponse({"error": "invalid_input", "message": str(exc)}, status=400)
+        except OpenAIError:
+            logger.exception("AI request failed")
+            return JsonResponse({"error": "ai_unavailable", "message": "The AI service is unavailable. Please try again."}, status=502)
+        except Exception:
+            logger.exception("API request failed")
+            return JsonResponse({"error": "internal_error", "message": "Something went wrong. Please try again."}, status=500)
+    return wrapped
+
+
+def json_body(request):
+    try:
+        body = json.loads(request.body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        raise InvalidInput("Send a valid JSON object.")
+    if not isinstance(body, dict):
+        raise InvalidInput("Send a JSON object, not a list or scalar.")
+    return body
+
+
+def string_value(value, name, default="", max_length=None):
+    if value is None:
+        value = default
+    if not isinstance(value, str):
+        raise InvalidInput(f"{name} must be text.")
+    value = value.strip()
+    if max_length is not None and len(value) > max_length:
+        raise InvalidInput(f"{name} must be at most {max_length} characters.")
+    return value
+
+
+def integer_value(value, name, minimum=1, maximum=20):
+    if isinstance(value, bool) or not re.fullmatch(r"[0-9]+", str(value)):
+        raise InvalidInput(f"{name} must be an integer between {minimum} and {maximum}.")
+    if len(str(value)) > len(str(maximum)):
+        raise InvalidInput(f"{name} must be between {minimum} and {maximum}.")
+    result = int(value)
+    if not minimum <= result <= maximum:
+        raise InvalidInput(f"{name} must be between {minimum} and {maximum}.")
+    return result
+
+
+def distance_value(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        raise InvalidInput("max_distance must be a number between 0 and 2.")
+    if isinstance(value, bool) or not math.isfinite(result) or not 0 <= result <= 2:
+        raise InvalidInput("max_distance must be a number between 0 and 2.")
+    return result
+
 
 @csrf_exempt
+@api_errors
 def retrieve(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
 
-    body = json.loads(request.body.decode("utf-8"))
-    query = body.get("query", "")
-    k = int(body.get("k", 5))
+    body = json_body(request)
+    query = string_value(body.get("query"), "query", max_length=10000)
+    if not query:
+        raise InvalidInput("Enter a search query.")
+    k = integer_value(body.get("k", 5), "k")
 
     q_emb = client.embeddings.create(
         model="text-embedding-3-small",
@@ -47,6 +124,7 @@ def retrieve(request):
     })
 
 @csrf_exempt
+@api_errors
 def ask(request):
     t0 = time.perf_counter()
     log = None
@@ -55,12 +133,14 @@ def ask(request):
         if request.method != "POST":
             return JsonResponse({"error": "POST only"}, status=405)
 
-        body = json.loads(request.body.decode("utf-8"))
-        question = (body.get("question") or "").strip()
-        k = int(body.get("k", 5))
+        body = json_body(request)
+        question = string_value(body.get("question"), "question", max_length=10000)
+        k = integer_value(body.get("k", 5), "k")
 
         if not question:
             return JsonResponse({"error": "question is required"}, status=400)
+
+        max_distance = distance_value(body.get("max_distance", 0.95))
 
         # Determining doc intent 
         q = question.lower()
@@ -74,9 +154,9 @@ def ask(request):
 
         effective_document_id = None
 
-        if raw_doc_id not in (None, "", 0):
+        if raw_doc_id not in (None, ""):
             try:
-                effective_document_id = int(raw_doc_id)
+                effective_document_id = integer_value(raw_doc_id, "document_id", maximum=9223372036854775807)
             except (TypeError, ValueError):
                 return JsonResponse({"error": "document_id must be an integer"}, status=400)
         elif session_doc_id:
@@ -92,6 +172,14 @@ def ask(request):
                 status=400
             )
 
+        if not Document.objects.filter(id=effective_document_id).exists():
+            return JsonResponse({"error": "document_not_found", "message": "Select an existing document."}, status=404)
+
+        log = QueryLog.objects.create(
+            question=question, k=k, document_id=effective_document_id,
+            max_distance=max_distance,
+        )
+
         # 1) embed question
         q_emb = client.embeddings.create(
             model="text-embedding-3-small",
@@ -105,19 +193,12 @@ def ask(request):
               .order_by("distance")[:k]
         )
 
-        max_distance = float(body.get("max_distance", 0.95))  # scoped default
 
         best = chunks[0] if chunks else None
         best_distance = float(best.distance) if best else None
 
-        # log early
-        log = QueryLog.objects.create(
-            question=question,
-            k=k,
-            document_id=effective_document_id,
-            max_distance=max_distance,
-            best_distance=best_distance,
-        )
+        log.best_distance = best_distance
+        log.save(update_fields=["best_distance"])
 
         if not best or float(best.distance) > max_distance:
             latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -163,208 +244,129 @@ def ask(request):
             log.error = repr(e)
             log.latency_ms = latency_ms
             log.save(update_fields=["error", "latency_ms"])
-        return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
+        raise
 
 def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
-    """
-    - splits on sentences/paragraphs
-    - packs into chunks up to max_chars
-    - overlaps last 'overlap' chars between chunks
-    """
-    text = (text or "").strip()
-    if not text:
-        return []
-
-    # Split into sentence-ish units 
-    parts = [p.strip() for p in re.split(r'(?<=[.!?])\s+|\n+', text) if p.strip()]
-
+    """Bound every chunk; prefer sentence/word boundaries and retain up to overlap characters."""
+    if max_chars < 1 or not 0 <= overlap < max_chars:
+        raise ValueError("Require max_chars > 0 and 0 <= overlap < max_chars.")
+    text = re.sub(r"\s+", " ", (text or "").strip())
     chunks = []
-    buf = ""
-
-    for p in parts:
-        if not buf:
-            buf = p
-        elif len(buf) + 1 + len(p) <= max_chars:
-            buf = f"{buf} {p}"
-        else:
-            chunks.append(buf.strip())
-            tail = buf[-overlap:] if overlap > 0 else ""
-            buf = f"{tail} {p}".strip()
-
-    if buf.strip():
-        chunks.append(buf.strip())
-
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        if end < len(text):
+            segment = text[start:end]
+            boundaries = [m.end() for m in re.finditer(r"[.!?](?=\s)", segment)]
+            candidates = [n for n in boundaries if n > overlap]
+            if candidates:
+                end = start + candidates[-1]
+            else:
+                space = segment.rfind(" ")
+                if space > overlap:
+                    end = start + space
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end == len(text):
+            break
+        start = max(start + 1, end - overlap)
     return chunks
 
+
+def store_document(request, title, text, source):
+    title = string_value(title, "title", default="Untitled", max_length=255) or "Untitled"
+    text = string_value(text, "text")
+    if len(text.encode("utf-8")) > MAX_UPLOAD_BYTES:
+        raise InvalidInput("Text must be at most 2 MB.")
+    parts = chunk_text(text)
+    if not parts:
+        raise InvalidInput("Add some text before uploading.")
+
+    # Finish every external call before changing the stored document.
+    embeddings = []
+    for offset in range(0, len(parts), 64):
+        batch = parts[offset:offset + 64]
+        items = client.embeddings.create(model="text-embedding-3-small", input=batch).data
+        if len(items) != len(batch):
+            raise RuntimeError("Incomplete embedding response")
+        embeddings.extend(item.embedding for item in items)
+
+    with transaction.atomic():
+        doc, created = Document.objects.select_for_update().get_or_create(title=title, source=source)
+        Chunk.objects.filter(document=doc).delete()
+        Chunk.objects.bulk_create([
+            Chunk(document=doc, chunk_index=i, text=part, embedding=embedding)
+            for i, (part, embedding) in enumerate(zip(parts, embeddings))
+        ])
+
+    request.session["current_document_id"] = doc.id
+    return JsonResponse({
+        "document_id": doc.id, "title": doc.title, "chunks_created": len(parts),
+        "status": "created" if created else "updated", "current_document_id": doc.id,
+    })
+
+
+def upload(request):
+    uploaded = request.FILES.get("file")
+    if uploaded is None:
+        raise InvalidInput("Choose a file first.")
+    if uploaded.size > MAX_UPLOAD_BYTES:
+        raise InvalidInput("Files must be at most 2 MB.")
+    return uploaded
+
+
 @csrf_exempt
+@api_errors
 def ingest_text(request):
-    try:
-        if request.method != "POST":
-            return JsonResponse({"error": "POST only"}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+    body = json_body(request)
+    return store_document(request, body.get("title"), body.get("text"), "ingested_text")
 
-        # Parsing JSON safely
-        try:
-            body = json.loads(request.body.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "invalid_json"}, status=400)
-
-        title = (body.get("title") or "Untitled").strip()
-        text = body.get("text") or ""
-
-        parts = chunk_text(text)
-        if not parts:
-            return JsonResponse({"error": "No text to ingest"}, status=400)
-
-        doc, created = Document.objects.get_or_create(title=title, source="ingested_text")
-
-        # Store selected/current doc in session
-        request.session["current_document_id"] = doc.id
-        request.session.modified = True
-
-        # If doc already exists, wipe old chunks so this is an "update"
-        if not created:
-            Chunk.objects.filter(document=doc).delete()
-
-        # Embedding in one call (cheaper/faster than one-by-one)
-        embs = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=parts,
-        ).data
-
-        for i, (chunk_str, item) in enumerate(zip(parts, embs)):
-            Chunk.objects.create(
-                document=doc,
-                chunk_index=i,
-                text=chunk_str,
-                embedding=item.embedding,
-            )
-
-        return JsonResponse({
-            "document_id": doc.id,
-            "chunks_created": len(parts),
-            "title": doc.title,
-            "status": "created" if created else "updated",
-            "current_document_id": doc.id,
-        })
-
-    except Exception as e:
-        return JsonResponse({"error": "internal_error", "details": repr(e)}, status=500)
 
 @csrf_exempt
+@api_errors
 def ingest_pdf(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
-
-    if "file" not in request.FILES:
-        return JsonResponse({"error": "Missing file field"}, status=400)
-
-    uploaded = request.FILES["file"]
-    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
-
-    reader = PdfReader(uploaded)
-    text = "\n".join([(page.extract_text() or "") for page in reader.pages]).strip()
-
+    uploaded = upload(request)
+    try:
+        reader = PdfReader(uploaded)
+        if reader.is_encrypted:
+            raise InvalidInput("Password-protected PDFs are not supported.")
+        text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except InvalidInput:
+        raise
+    except Exception:
+        raise InvalidInput("This PDF could not be read. Choose a valid, text-based PDF.")
     if not text:
-        return JsonResponse({"error": "Could not extract text from PDF"}, status=400)
+        raise InvalidInput("No text found. Scanned PDFs need OCR before uploading.")
+    return store_document(request, request.POST.get("title") or uploaded.name, text, "pdf")
 
-    parts = chunk_text(text)
-    if not parts:
-        return JsonResponse({"error": "No text to ingest"}, status=400)
-
-    doc, created = Document.objects.get_or_create(title=title, source="pdf")
-
-    request.session["current_document_id"] = doc.id
-    request.session.modified = True
-
-    if not created:
-        Chunk.objects.filter(document=doc).delete()
-
-    embs = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=parts,
-    ).data
-
-    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
-        Chunk.objects.create(
-            document=doc,
-            chunk_index=i,
-            text=chunk_str,
-            embedding=item.embedding,
-        )
-
-    return JsonResponse({
-        "document_id": doc.id,
-        "title": doc.title,
-        "chunks_created": len(parts),
-        "status": "created" if created else "updated",
-        "current_document_id": request.session["current_document_id"],
-    })
 
 @csrf_exempt
+@api_errors
 def ingest_file(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
-
-    if "file" not in request.FILES:
-        return JsonResponse({"error": "Missing file field"}, status=400)
-
-    uploaded = request.FILES["file"]
-    title = (request.POST.get("title") or uploaded.name or "Untitled").strip()
-
-    # Basic type check (MVP)
-    filename = (uploaded.name or "").lower()
-    if not (filename.endswith(".txt") or filename.endswith(".md")):
-        return JsonResponse({"error": "Only .txt or .md supported"}, status=400)
-
-    # Read bytes -> text
+    uploaded = upload(request)
+    if not uploaded.name.lower().endswith((".txt", ".md")):
+        raise InvalidInput("Choose a .txt or .md file.")
     try:
-        raw = uploaded.read()
-        text = raw.decode("utf-8", errors="ignore").strip()
-    except Exception as e:
-        return JsonResponse({"error": "Could not read file", "details": repr(e)}, status=400)
+        text = uploaded.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise InvalidInput("Save this file as UTF-8 text and try again.")
+    return store_document(request, request.POST.get("title") or uploaded.name, text, "text_file")
 
-    if not text:
-        return JsonResponse({"error": "Empty file"}, status=400)
-
-    parts = chunk_text(text)
-    if not parts:
-        return JsonResponse({"error": "No text to ingest"}, status=400)
-
-    doc, created = Document.objects.get_or_create(title=title, source="text_file")
-
-    request.session["current_document_id"] = doc.id
-    request.session.modified = True
-
-    if not created:
-        Chunk.objects.filter(document=doc).delete()
-
-    embs = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=parts,
-    ).data
-
-    for i, (chunk_str, item) in enumerate(zip(parts, embs)):
-        Chunk.objects.create(
-            document=doc,
-            chunk_index=i,
-            text=chunk_str,
-            embedding=item.embedding,
-        )
-
-    return JsonResponse({
-        "document_id": doc.id,
-        "title": doc.title,
-        "chunks_created": len(parts),
-        "status": "created" if created else "updated",
-        "current_document_id": request.session["current_document_id"],
-    })
 
 @csrf_exempt
+@api_errors
 def documents(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET only"}, status=405)
 
-    limit = int(request.GET.get("limit", 20))
+    limit = integer_value(request.GET.get("limit", 20), "limit", maximum=100)
     docs = Document.objects.order_by("-id")[:limit]
 
     return JsonResponse({
@@ -379,24 +381,23 @@ def documents(request):
             for d in docs
         ],
         "current_document_id": request.session.get("current_document_id"),
+        "current_document_title": Document.objects.filter(id=request.session.get("current_document_id")).values_list("title", flat=True).first(),
     })
 
 @csrf_exempt
+@api_errors
 def select_document(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
     
-    try:
-        body = json.loads(request.body.decode("utf-8"))
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid_json"}, status=400)
+    body = json_body(request)
     
     doc_id = body.get("document_id")
 
     if not doc_id:
         return JsonResponse({"error": "document_id is required"}, status=400)
     try:
-        doc_id = int(doc_id)
+        doc_id = integer_value(doc_id, "document_id", maximum=9223372036854775807)
     except (TypeError, ValueError):
         return JsonResponse({"error": "document_id must be an integer"}, status=400)
     
@@ -408,6 +409,7 @@ def select_document(request):
     return JsonResponse({"current_document_id": doc_id, "status": "ok"})
 
 @csrf_exempt
+@api_errors
 def clear_selected_document(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
@@ -420,6 +422,7 @@ def app(request):
     return render(request, "app.html")
 
 @csrf_exempt
+@api_errors
 def reset_data(request):
     """
     DEV ONLY: wipes all Documents, Chunks, and QueryLogs.
@@ -431,10 +434,7 @@ def reset_data(request):
     if not getattr(settings, "DEBUG", False):
         return JsonResponse({"error": "forbidden"}, status=403)
 
-    try:
-        body = json.loads(request.body.decode("utf-8") or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid_json"}, status=400)
+    body = json_body(request)
 
     # require explicit confirmation to avoid accidental wipes
     if body.get("confirm") != "RESET":
@@ -461,9 +461,9 @@ def reset_data(request):
     })
 
 @require_GET
+@api_errors
 def logs(request):
-    limit = int(request.GET.get("limit", 20))
-    limit = max(1, min(limit, 100)) 
+    limit = integer_value(request.GET.get("limit", 20), "limit", maximum=100)
 
     rows = QueryLog.objects.order_by("-id")[:limit]
 
@@ -474,6 +474,8 @@ def logs(request):
                 "id": r.id,
                 "created_at": r.created_at.isoformat(),
                 "question": r.question,
+                "answer": r.answer,
+                "status": "error" if r.error else ("unanswered" if r.answer.strip().lower().replace("’", "'").rstrip(".") == "i don't know" else "answered"),
                 "k": r.k,
                 "document_id": r.document_id,
                 "max_distance": r.max_distance,
