@@ -86,12 +86,13 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 ### 3) Configure environment variables
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env`, set your OpenAI API key, and generate a unique Django secret:
 
-```dotenv
-OPENAI_API_KEY="your_key_here"
+```bash
+cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
-`manage.py` already loads `.env` with python-dotenv. Alternatively, export `OPENAI_API_KEY` in your shell. The `.env` file is excluded from Git. Other entry points, such as a production WSGI/ASGI server, need environment variables supplied separately.
+Paste the generated value into `DJANGO_SECRET_KEY` in `.env`. Keep `DJANGO_DEBUG=true` for local HTTP development. Never commit real secrets. Settings load `.env` for management commands, WSGI and ASGI; exported environment variables take precedence.
 
 ### 4) Start Postgres + pgvector (Docker)
 Open Docker Desktop and wait until its engine is running (or start your Docker Engine service). Then run this from the project folder to start PostgreSQL 16 with pgvector:
@@ -259,4 +260,64 @@ The recorded run passed **20/20 answer checks**, including **12/12 supported ans
 - `/api/ask/` searches one document at a time. It uses an explicit `document_id`, then the session selection, or the latest document for certain document-summary questions. The separate `/api/retrieve/` endpoint searches across documents.
 - The distance guardrail returns “I don't know” when no chunks are found or the best cosine distance exceeds `max_distance` (default `0.95`). This threshold does not guarantee that every unsupported question will be rejected.
 - Re-ingesting the same title and source type replaces that document's chunks. Replacement embeddings are generated first; database replacement is atomic, so embedding or database-write failures preserve the previous chunks. Concurrent first-time uploads with identical titles are not deduplicated by a database constraint.
-- This is a local development demo: debug mode, development credentials, and unauthenticated API endpoints require changes before public deployment.
+- Production deployment, general account/login throttling and CI/CD are not yet implemented. Portfolio demo entry and questions have database-backed limits. Authentication and environment-based production settings are in place; a Linux/HTTPS deployment still needs to be configured and verified.
+
+
+## Authentication and production settings (step 1)
+
+The UI and all document/query APIs require a Django user account. Portfolio visitors can enter through the temporary workspace flow described below. For invited accounts this is a shared knowledge base: users can view, ingest, and replace shared documents and see query history. Visitor access is scoped to its browser workspace rather than this permanent shared area. There is no public registration. Visitors receive isolated, temporary workspaces; owner accounts retain the original shared permanent area.
+
+After applying migrations, create an administrator locally:
+
+```bash
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+Open `/accounts/login/` and sign in. The administrator can create regular users through `/admin/`. Sign out using the button in the app. Login and all modifying browser requests require CSRF protection; the interface supplies the token automatically. Existing curl examples now require a logged-in session cookie and a matching CSRF token (`X-CSRFToken`); anonymous API access is rejected. The reset endpoint additionally requires a staff account and development mode, and its button is hidden otherwise.
+
+Production uses `DJANGO_DEBUG=false` (the default if unset), a separate random `DJANGO_SECRET_KEY` of at least 50 characters, explicit `DJANGO_ALLOWED_HOSTS`, and explicit `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_HOST`. `POSTGRES_PORT` defaults to 5432. Missing required production configuration prevents startup. Set `DJANGO_CSRF_TRUSTED_ORIGINS` to any required trusted HTTPS origins, separated by commas.
+
+Production settings enforce HTTPS redirects, secure session/CSRF cookies, and one-hour HSTS. HSTS subdomain coverage and browser preloading remain off until the eventual domain configuration is known; deployment checks therefore report W005 and W021 for those optional policies. `DJANGO_TRUST_PROXY=true` is only appropriate behind a trusted proxy that overwrites `X-Forwarded-Proto` and prevents clients from reaching Gunicorn directly. It is disabled by default. Static assets can be collected into `staticfiles/`; serving them is part of the later deployment step. These settings do not themselves provision HTTPS or deploy the application.
+
+The synthetic evaluation command creates a temporary authenticated user and rolls it back with the evaluation documents/logs. It still makes billable live AI calls and evaluates application behavior rather than the browser login or deployed HTTPS stack.
+
+
+## Temporary visitor workspaces
+
+**Try the demo** is a CSRF-protected POST that creates a private workspace without signup. Each browser session receives an unguessable workspace ID bound to that session, using the existing non-staff identity with no usable password. All document and history queries are scoped to the workspace. Supplying another document/workspace ID does not grant access. Owner sign-in uses the separate permanent area and does not list visitors' temporary content.
+
+Visitors can upload PDF/TXT/Markdown files or paste text, ask questions, inspect retrieved passages, search their documents, read their own answers/history/distances/latency, replace documents, and delete documents plus associated history. They can edit or delete their own copies of the two samples without changing the templates or other visitors' data. JSON/CSV support is a separate upcoming step.
+
+### Setup and cleanup
+
+```bash
+python manage.py migrate
+python manage.py prepare_demo
+python manage.py runserver
+```
+
+Preparation embeds only the bundled museum fixture and `sample_docs/demo.txt` and skips ready samples on repeat runs. Each new visitor gets copies of these documents and their vectors, with no additional embedding calls. Templates have `is_demo=True` and no workspace; visitor copies are ordinary editable documents owned by their workspace. Existing private documents are never copied.
+
+Run the cleanup worker alongside the web server in another terminal:
+
+```bash
+python manage.py cleanup_workspaces --watch
+```
+
+A workspace expires **24 hours after creation**, independent of activity. Expiration immediately denies reads and writes; the cleanup worker checks every 60 seconds and cascades deletion to the expired workspace's documents, vectors, and query logs. The worker retries database failures. It must remain running; a sleeping/stopped computer cannot run cleanup. New demo entry also attempts cleanup. Production process supervision/scheduling will be wired during the deployment step. For a scheduler or manual cleanup, run `python manage.py cleanup_workspaces` without `--watch`.
+
+Signing out or clearing cookies loses access to the workspace; it still expires on its original schedule. Existing non-expired sessions are reused when clicking Try the demo again. Visitor uploads are extracted in memory; the app does not save original uploaded files. Deletion refers to this application's stored data, not third-party API retention. The entry page discloses that uploads/questions go to OpenAI and asks visitors to use non-sensitive content.
+
+### Bounds and concurrency
+
+- Five documents per workspace, including the two sample copies. Delete or replace a document to make room.
+- 2 MB uploaded file/text request limit, 20 PDF pages, and 20,000 extracted characters per visitor document.
+- Up to 1,000 characters per question/search, three retrieved passages, and 300 answer output tokens.
+- Questions and vector searches share budgets: 10 per session/hour, 30 per network address/hour, 100 globally/day.
+- Upload/replacement attempts have separate budgets: 5 per session/hour, 10 per network address/hour, 30 globally/day.
+- Entry is limited to 20 new workspaces per network address/hour and 500 globally/day.
+
+Quotas use fixed UTC windows and atomic PostgreSQL counters across workers. Billable attempts reserve capacity before calling OpenAI, even if the provider later fails. Replacing a document generates embeddings before atomically changing the stored content; workspace row locks and a uniqueness constraint prevent cross-visitor collisions and enforce document caps under concurrent writes. Expiration is rechecked before committing uploads. These are bounded request budgets, not exact dollar limits.
+
+Only `REMOTE_ADDR` is trusted for network limits. Configure real-client-address handling with the trusted reverse proxy during deployment; do not accept arbitrary forwarded headers from visitors. Login brute-force protection for ordinary accounts remains separate deployment work. Periodically run `cleanup_demo_limits` and Django's `clearsessions` to remove expired counter/session records; these do not contain document text.
