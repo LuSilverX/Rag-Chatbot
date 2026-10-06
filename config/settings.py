@@ -10,22 +10,49 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# The same configuration is available to manage.py, WSGI and ASGI.
+# Exported environment variables take precedence over the local file.
+load_dotenv(BASE_DIR / ".env")
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+def env_bool(name, default=False):
+    value = os.environ.get(name, str(default)).lower()
+    if value not in {"true", "false", "1", "0"}:
+        raise ImproperlyConfigured(f"{name} must be true, false, 1 or 0.")
+    return value in {"true", "1"}
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_8l&reo!lt!hi$olx3uq51z@v0p%44)oo)uz=ips1erxml(a7v'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def env_list(name, default=""):
+    return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
 
-ALLOWED_HOSTS = []
+
+DEBUG = env_bool("DJANGO_DEBUG")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY or (not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith("django-insecure-"))):
+    raise ImproperlyConfigured("Set DJANGO_SECRET_KEY to a strong random secret (at least 50 characters in production).")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1" if DEBUG else "")
+if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
+    raise ImproperlyConfigured("Set explicit DJANGO_ALLOWED_HOSTS in production.")
+
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
+# Enable only behind a trusted proxy that overwrites X-Forwarded-Proto.
+if env_bool("DJANGO_TRUST_PROXY"):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "/api/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+CSRF_FAILURE_VIEW = "api.views.csrf_failure"
 
 
 # Application definition
@@ -81,13 +108,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'ragdb',
-        'USER': 'raguser',
-        'PASSWORD': 'ragpass',
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
+        'NAME': os.environ.get('POSTGRES_DB', 'ragdb' if DEBUG else ''),
+        'USER': os.environ.get('POSTGRES_USER', 'raguser' if DEBUG else ''),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'ragpass' if DEBUG else ''),
+        'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1' if DEBUG else ''),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
+
+
+if not DEBUG:
+    for field in ("NAME", "USER", "PASSWORD", "HOST"):
+        if not DATABASES["default"][field]:
+            raise ImproperlyConfigured(f"Set the PostgreSQL {field.lower()} environment variable in production.")
 
 
 # Password validation
@@ -124,9 +157,27 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Conservative fixed-window portfolio demo budgets (all visitors share the daily cap).
+DEMO_DAILY_LIMIT = int(os.environ.get("DEMO_DAILY_LIMIT", "100"))
+DEMO_IP_HOURLY_LIMIT = int(os.environ.get("DEMO_IP_HOURLY_LIMIT", "30"))
+DEMO_SESSION_HOURLY_LIMIT = int(os.environ.get("DEMO_SESSION_HOURLY_LIMIT", "10"))
+if min(DEMO_DAILY_LIMIT, DEMO_IP_HOURLY_LIMIT, DEMO_SESSION_HOURLY_LIMIT) < 1:
+    raise ImproperlyConfigured("Demo limits must be positive integers.")
+
+# Visitor uploads are bounded independently of question/search requests.
+DEMO_UPLOAD_DAILY_LIMIT = int(os.environ.get("DEMO_UPLOAD_DAILY_LIMIT", "30"))
+DEMO_UPLOAD_IP_HOURLY_LIMIT = int(os.environ.get("DEMO_UPLOAD_IP_HOURLY_LIMIT", "10"))
+DEMO_UPLOAD_SESSION_HOURLY_LIMIT = int(os.environ.get("DEMO_UPLOAD_SESSION_HOURLY_LIMIT", "5"))
+DEMO_MAX_DOCUMENTS = 5
+DEMO_MAX_TEXT_CHARS = 20000
+DEMO_MAX_PDF_PAGES = 20
+if min(DEMO_UPLOAD_DAILY_LIMIT, DEMO_UPLOAD_IP_HOURLY_LIMIT, DEMO_UPLOAD_SESSION_HOURLY_LIMIT) < 1:
+    raise ImproperlyConfigured("Visitor upload limits must be positive integers.")

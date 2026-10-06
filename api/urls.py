@@ -10,7 +10,8 @@ from .views import (
     select_document, 
     app, 
     ingest_file, 
-    reset_data
+    reset_data,
+    delete_document
 )
 
 urlpatterns = [
@@ -25,4 +26,5 @@ urlpatterns = [
     path("ingest_file/", ingest_file),
     path("clear_document/", clear_selected_document),
     path("reset_data/", reset_data),
+    path("delete_document/", delete_document),
 ]

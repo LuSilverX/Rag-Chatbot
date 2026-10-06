@@ -29,17 +29,24 @@
 <body>
 <main>
   <h1>Document Q&amp;A</h1>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+    <span class="muted">{% if is_demo %}Your temporary workspace{% else %}Signed in as {{ user.username }} · Shared knowledge base{% endif %}</span>
+    <button type="submit">Sign out</button>
+  </form>
   <p class="muted">Ask questions about your documents and inspect the sources behind each answer. Each question stands on its own.</p>
+  {% if is_demo %}<p class="muted">Upload your own documents or explore your editable sample copies. Your documents and history are isolated from other visitors. This workspace expires on <time datetime="{{ workspace.expires_at|date:'c' }}">{{ workspace.expires_at|date:"M j, Y, H:i" }} UTC</time> and its data is then automatically deleted. Keep this browser session to return; signing out loses access. Uploads and questions are sent to OpenAI; use non-sensitive documents.</p>{% endif %}
   <section class="card" aria-labelledby="documentsHeading">
     <h2 id="documentsHeading">1. Choose a document</h2>
     <label for="docs">Your documents</label>
     <select id="docs"><option value="">Select a document</option></select>
     <p class="muted">Selected: <strong id="currentDoc">None</strong></p>
     <p id="outDocs" class="status" role="status"></p>
-    <div class="actions"><button id="refreshDocs">Refresh documents</button><button id="btnClearDoc">Clear selection</button></div>
-    <details style="margin-top:20px">
-      <summary>Add a document</summary>
-      <p class="muted">Upload a text-based PDF, TXT or Markdown file, or paste text. Maximum 2 MB. Uploads and questions use OpenAI.</p>
+    <div class="actions"><button id="refreshDocs">Refresh documents</button><button id="btnClearDoc">Clear selection</button><button id="btnDeleteDoc" class="danger" disabled>Delete selected document</button></div>
+    <details style="margin-top:20px" {% if is_demo %}open{% endif %}>
+      <summary>Add or replace a document</summary>
+      <label><input id="replaceSelected" type="checkbox" style="width:auto"> Replace the selected document with this upload or pasted text</label>
+      <p class="muted">Replacement keeps the selected document's ID and updates its contents. If processing fails, the previous content is preserved.</p>
+      <p class="muted">Upload a text-based PDF, TXT or Markdown file, or paste text. Maximum 2 MB. Uploads and questions use OpenAI.{% if is_demo %} Up to five documents including sample copies, 20 PDF pages, and 20,000 extracted characters per document. Up to {{ demo_upload_limit }} upload attempts and {{ demo_question_limit }} question/search attempts per hour; shared limits also apply.{% endif %}</p>
       <div class="grid">
         <section>
           <h3>Upload a file</h3>
@@ -62,23 +69,28 @@
     <h2 id="askHeading">2. Ask a question</h2>
     <form id="askForm">
       <label for="question">What would you like to know?</label>
-      <input id="question" placeholder="Ask about the selected document" required maxlength="10000">
+      <input id="question" placeholder="Ask about the selected document" required maxlength="{% if is_demo %}1000{% else %}10000{% endif %}">
       <div class="actions"><button id="btnAsk" class="primary" disabled>Ask question</button></div>
     </form>
+    {% if is_demo %}<div class="actions" id="suggestions">
+      <button type="button" data-document="Harbor Museum — Demo" data-question="What time does Harbor Museum open and close?">Museum opening hours</button>
+      <button type="button" data-document="Harbor Museum — Demo" data-question="Who founded Harbor Museum?">Try an unsupported question</button>
+      <button type="button" data-document="How RAG Works — Demo" data-question="How does this project find relevant passages?">How retrieval works</button>
+    </div>{% endif %}
     <h3>Answer</h3><div id="outAnswer" class="answer" role="status">Select a document to get started.</div>
     <h3>Sources</h3><div id="outSources"><p class="muted">Supporting passages will appear here.</p></div>
   </section>
   <details class="card" id="developer">
-    <summary>Developer tools</summary>
-    <label for="k">Sources retrieved per question</label><input id="k" type="number" value="5" min="1" max="20">
+    <summary>Your history and retrieval tools</summary>
+    <label for="k">Sources retrieved per question</label><input id="k" type="number" value="{% if is_demo %}3{% else %}5{% endif %}" min="1" max="{% if is_demo %}3{% else %}20{% endif %}">
     <details><summary>Last ingestion response</summary><pre id="rawIngestion">No uploads yet.</pre></details>
-    <h3>Vector search sandbox</h3><p class="muted">Search across all documents without generating an answer.</p>
+    <h3>Vector search sandbox</h3><p class="muted">Search across documents in your workspace without generating an answer.</p>
     <label for="sandboxQuery">Search query</label><input id="sandboxQuery">
-    <label for="sandboxK">Chunks to retrieve</label><input id="sandboxK" type="number" value="3" min="1" max="20">
+    <label for="sandboxK">Chunks to retrieve</label><input id="sandboxK" type="number" value="3" min="1" max="{% if is_demo %}3{% else %}20{% endif %}">
     <button id="btnRetrieve">Search database</button><div id="outSandbox" role="status"></div>
     <h3>Query history</h3><button id="btnRefreshLogs">Refresh history</button>
     <p id="outLogs" role="status"></p><div class="scroll"><table><thead><tr><th>Time</th><th>Question</th><th>Document ID</th><th>Distance</th><th>Latency</th><th>Status</th></tr></thead><tbody id="logBody"></tbody></table></div>
-    <h3>Reset local data</h3><p class="muted">Deletes every document, chunk and query log.</p><button id="btnResetDb" class="danger">Reset database</button><p id="outReset" role="status"></p>
+    {% if can_reset %}<h3>Reset local data</h3><p class="muted">Deletes every document, chunk and query log.</p><button id="btnResetDb" class="danger">Reset database</button><p id="outReset" role="status"></p>{% endif %}
   </details>
 </main>
 <script>
@@ -87,7 +99,12 @@ let selectedId = null;
 let asking = false;
 let selectionVersion = 0;
 function message(id, text, error=false) { $(id).textContent=text; $(id).classList.toggle('error',error); }
-function syncAsk() { $('btnAsk').disabled = asking || !selectedId; }
+function syncAsk() {
+  $('btnAsk').disabled = asking || !selectedId;
+  $('btnDeleteDoc').disabled = asking || !selectedId;
+  $('replaceSelected').disabled = !selectedId;
+  if (!selectedId) $('replaceSelected').checked=false;
+}
 function clearAnswer() {
   selectionVersion++;
   message('outAnswer', selectedId ? 'Ask a question about this document.' : 'Select a document to get started.');
@@ -97,7 +114,15 @@ async function api(url, options={}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
   try {
-    const response = await fetch(url, {...options, signal:controller.signal});
+    const headers = new Headers(options.headers || {});
+    if (!['GET', 'HEAD', 'OPTIONS'].includes((options.method || 'GET').toUpperCase())) {
+      headers.set('X-CSRFToken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    }
+    const response = await fetch(url, {...options, headers, credentials:'same-origin', signal:controller.signal});
+    if (response.status === 401) {
+      window.location.assign('/accounts/login/?next=/api/');
+      throw new Error('Please sign in to continue.');
+    }
     let data;
     try { data = await response.json(); } catch { throw new Error('The server returned an unreadable response. Please try again.'); }
     if (!response.ok) throw new Error(data.message || data.error || 'The request failed. Please try again.');
@@ -146,24 +171,34 @@ $('docs').onchange=async () => {
   } catch(error) { $('docs').value=selectedId ? String(selectedId) : ''; message('outDocs',error.message,true); }
   finally { $('docs').disabled=false; }
 };
+$('btnDeleteDoc').onclick=() => action('btnDeleteDoc','outDocs',async () => {
+  if (!selectedId || !confirm('Delete this document and its question history from your workspace?')) return;
+  await post('/api/delete_document/', {document_id:selectedId});
+  await refreshDocs(); await refreshLogs(); clearAnswer();
+});
+function replacementId() {
+  if (!$('replaceSelected').checked) return null;
+  if (!selectedId) throw new Error('Select a document to replace first.');
+  return selectedId;
+}
 $('btnClearDoc').onclick=() => action('btnClearDoc','outDocs',async () => { await post('/api/clear_document/',{}); await refreshDocs(); });
 async function ingested(data,output) {
-  $('rawIngestion').textContent=JSON.stringify(data,null,2);
+  if ($('rawIngestion')) $('rawIngestion').textContent=JSON.stringify(data,null,2);
   message(output,`“${data.title}” is ready for questions.`);
   clearAnswer();
   await refreshDocs();
 }
-$('btnIngestText').onclick=() => action('btnIngestText','outIngestText',async () => {
+if ($('btnIngestText')) $('btnIngestText').onclick=() => action('btnIngestText','outIngestText',async () => {
   if (!$('textBody').value.trim()) throw new Error('Paste some text first.');
   message('outIngestText','Adding document…');
-  await ingested(await post('/api/ingest_text/',{title:$('textTitle').value,text:$('textBody').value}),'outIngestText');
+  await ingested(await post('/api/ingest_text/',{title:$('textTitle').value,text:$('textBody').value,document_id:replacementId()}),'outIngestText');
 });
-$('btnUpload').onclick=() => action('btnUpload','outUpload',async () => {
+if ($('btnUpload')) $('btnUpload').onclick=() => action('btnUpload','outUpload',async () => {
   const file=$('documentFile').files[0];
   if (!file) throw new Error('Choose a file first.');
   if (!/\.(pdf|txt|md)$/i.test(file.name)) throw new Error('Choose a PDF, TXT or Markdown file.');
   if (file.size>2*1024*1024) throw new Error('Files must be at most 2 MB.');
-  const form=new FormData(); form.append('file',file); form.append('title',$('fileTitle').value.trim());
+  const form=new FormData(); const replacement=replacementId(); if (replacement) form.append('document_id',String(replacement)); form.append('file',file); form.append('title',$('fileTitle').value.trim());
   message('outUpload','Uploading document…');
   const endpoint=/\.pdf$/i.test(file.name) ? 'ingest_pdf' : 'ingest_file';
   await ingested(await api(`/api/${endpoint}/`,{method:'POST',body:form}),'outUpload');
@@ -174,13 +209,13 @@ $('askForm').onsubmit=async event => {
   if (!question) { message('outAnswer','Enter a question first.',true); return; }
   const version=selectionVersion; asking=true; syncAsk(); message('outAnswer','Finding an answer…'); $('outSources').replaceChildren();
   try {
-    const data=await post('/api/ask/',{question,k:Number($('k').value),document_id:selectedId});
+    const data=await post('/api/ask/',{question,k:$('k') ? Number($('k').value) : 3,document_id:selectedId});
     if (version===selectionVersion) { message('outAnswer',data.answer); renderSources(data.sources || [],'outSources'); }
   } catch(error) { if (version===selectionVersion) message('outAnswer',error.message,true); }
   finally { asking=false; syncAsk(); }
-  if ($('developer').open) refreshLogs().catch(error => message('outLogs',error.message,true));
+  if ($('developer')?.open) refreshLogs().catch(error => message('outLogs',error.message,true));
 };
-$('btnRetrieve').onclick=() => action('btnRetrieve','outSandbox',async () => {
+if ($('btnRetrieve')) $('btnRetrieve').onclick=() => action('btnRetrieve','outSandbox',async () => {
   message('outSandbox','Searching…');
   const data=await post('/api/retrieve/',{query:$('sandboxQuery').value,k:Number($('sandboxK').value)});
   renderSources(data.results,'outSandbox');
@@ -190,15 +225,31 @@ async function refreshLogs() {
   message('outLogs',data.logs.length ? '' : 'No questions yet.');
   data.logs.forEach(log => {
     const row=document.createElement('tr');
-    const values=[new Date(log.created_at).toLocaleTimeString(),log.question,log.document_id ?? '—',log.best_distance==null ? '—' : Number(log.best_distance).toFixed(4),log.latency_ms==null ? '—' : `${log.latency_ms} ms`,{error:'Error',unanswered:'Unanswered',answered:'Answered'}[log.status] || 'Unknown'];
+    const values=[new Date(log.created_at).toLocaleTimeString(),log.question,log.document_id ?? '—',log.best_distance==null ? '—' : Number(log.best_distance).toFixed(4),log.latency_ms==null ? '—' : `${log.latency_ms} ms`,{pending:'Answering…',error:'Error',unanswered:'Unanswered',answered:'Answered'}[log.status] || 'Unknown'];
     values.forEach(value => { const cell=document.createElement('td'); cell.textContent=value; row.append(cell); }); $('logBody').append(row);
+    const detailRow=document.createElement('tr'); const cell=document.createElement('td'); cell.colSpan=6; const detail=document.createElement('details'); const summary=document.createElement('summary'); summary.textContent='Answer and source passages'; const answer=document.createElement('p'); answer.textContent=log.answer || log.error || 'No answer recorded.'; detail.append(summary,answer); (log.sources || []).forEach(source => { const passage=document.createElement('p'); passage.textContent=source.text; detail.append(passage); }); cell.append(detail); detailRow.append(cell); $('logBody').append(detailRow);
   });
 }
-$('btnRefreshLogs').onclick=() => action('btnRefreshLogs','outLogs',refreshLogs);
-$('developer').ontoggle=() => { if ($('developer').open) refreshLogs().catch(error => message('outLogs',error.message,true)); };
-$('btnResetDb').onclick=() => action('btnResetDb','outReset',async () => {
+if ($('btnRefreshLogs')) $('btnRefreshLogs').onclick=() => action('btnRefreshLogs','outLogs',refreshLogs);
+if ($('developer')) $('developer').ontoggle=() => { if ($('developer')?.open) refreshLogs().catch(error => message('outLogs',error.message,true)); };
+if ($('btnResetDb')) $('btnResetDb').onclick=() => action('btnResetDb','outReset',async () => {
   if (!confirm('Delete ALL documents, chunks and logs?') || prompt('Type RESET to confirm:')!=='RESET') return;
   await post('/api/reset_data/',{confirm:'RESET'}); message('outReset','Local data reset.'); await refreshDocs(); await refreshLogs(); clearAnswer();
+});
+document.querySelectorAll('[data-question]').forEach(button => {
+  button.onclick=async () => {
+    button.disabled=true;
+    try {
+      const sample=Array.from($('docs').options).find(option => option.text===button.dataset.document);
+      if (!sample) throw new Error('This sample was renamed or deleted. Choose another document and ask your own question.');
+      if (sample) {
+        await post('/api/select_document/', {document_id:Number(sample.value)});
+        await refreshDocs();
+      }
+      $('question').value=button.dataset.question; $('question').focus();
+    } catch(error) { message('outAnswer',error.message,true); }
+    finally { button.disabled=false; }
+  };
 });
 refreshDocs().catch(error => message('outDocs',error.message,true));
 </script>

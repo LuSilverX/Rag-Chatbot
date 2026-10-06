@@ -5,6 +5,7 @@ import statistics
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from django.contrib.auth import get_user_model
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -37,10 +38,13 @@ class Command(BaseCommand):
         rows = []
         self.stdout.write('Using only synthetic museum text. Live OpenAI API charges apply.')
         with transaction.atomic():
+            # Local management command: this temporary user is rolled back too.
+            user = get_user_model().objects.create_user(username=f"eval-{time.time_ns()}")
             request = factory.post('/api/ingest_text/', data=json.dumps({
                 'title': f'Synthetic evaluation {time.time_ns()}', 'text': fixture['document'],
             }), content_type='application/json')
             request.session = session
+            request.user = user
             response = ingest_text(request)
             data = json.loads(response.content)
             if response.status_code != 200:
@@ -52,6 +56,7 @@ class Command(BaseCommand):
                     'document_id': document_id, 'question': case['question'], 'k': 3,
                 }), content_type='application/json')
                 request.session = session
+                request.user = user
                 started = time.perf_counter()
                 response = ask(request)
                 elapsed = round((time.perf_counter() - started) * 1000)

@@ -1,4 +1,4 @@
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 import json
 import time
 import logging
@@ -7,12 +7,18 @@ from functools import wraps
 from django.db import transaction
 from django.core.exceptions import RequestDataTooBig
 from openai import OpenAIError
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, Http404
+from django.contrib.auth.decorators import login_required
+from django.views.csrf import csrf_failure as django_csrf_failure
 from openai import OpenAI
 from pgvector.django import CosineDistance
 from .models import Chunk, Document, QueryLog
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth import login, logout
+from .demo import (is_demo, visible_documents, consume_quota, DemoLimitExceeded,
+                   get_workspace, WorkspaceExpired, workspace_is_active, lock_workspace,
+                   create_workspace, cleanup_expired_workspaces)
+from .models import DemoAccount
 from pypdf import PdfReader
 import re
 from django.conf import settings
@@ -26,11 +32,29 @@ class InvalidInput(ValueError):
     pass
 
 
+def csrf_failure(request, reason=""):
+    if request.path.startswith("/api/"):
+        return JsonResponse({"error": "csrf_failed", "message": "Your session could not be verified. Refresh the page and try again."}, status=403)
+    return django_csrf_failure(request, reason=reason)
+
+
 def api_errors(view):
     @wraps(view)
     def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "authentication_required", "message": "Please sign in to continue."}, status=401)
         try:
-            return view(request, *args, **kwargs)
+            workspace = get_workspace(request)
+            response = view(request, *args, **kwargs)
+            if workspace and not workspace_is_active(workspace):
+                raise WorkspaceExpired()
+            return response
+        except WorkspaceExpired:
+            return JsonResponse({"error": "workspace_expired", "message": "Your temporary workspace has expired. Start a new workspace to continue."}, status=401)
+        except Http404:
+            return JsonResponse({"error": "document_not_found", "message": "Select a document in your workspace."}, status=404)
+        except DemoLimitExceeded as exc:
+            return demo_limit_response(exc)
         except RequestDataTooBig:
             return JsonResponse({"error": "invalid_input", "message": "The request is too large. Text and files must be at most 2 MB."}, status=400)
         except InvalidInput as exc:
@@ -42,6 +66,37 @@ def api_errors(view):
             logger.exception("API request failed")
             return JsonResponse({"error": "internal_error", "message": "Something went wrong. Please try again."}, status=500)
     return wrapped
+
+
+def demo_limit_response(exc):
+    response = JsonResponse({"error": "demo_limit", "message": "The demo usage limit has been reached. Please try again later."}, status=429)
+    response["Retry-After"] = str(exc.retry_after)
+    return response
+
+
+@require_POST
+def start_demo(request):
+    cleanup_expired_workspaces()
+    if request.user.is_authenticated and not is_demo(request):
+        return redirect("/api/")
+    account = DemoAccount.objects.select_related("user").first()
+    if not account or not account.user.is_active or account.user.is_staff or account.user.is_superuser or account.user.has_usable_password():
+        return render(request, "registration/demo_unavailable.html", status=503)
+    if request.user.is_authenticated:
+        try:
+            get_workspace(request)
+            return redirect("/api/")
+        except WorkspaceExpired:
+            logout(request)
+    try:
+        consume_quota(request, entry=True)
+    except DemoLimitExceeded as exc:
+        response = render(request, "registration/demo_unavailable.html", {"limited": True}, status=429)
+        response['Retry-After'] = str(exc.retry_after)
+        return response
+    login(request, account.user, backend="django.contrib.auth.backends.ModelBackend")
+    create_workspace(request)
+    return redirect("/api/")
 
 
 def json_body(request):
@@ -86,7 +141,6 @@ def distance_value(value):
     return result
 
 
-@csrf_exempt
 @api_errors
 def retrieve(request):
     if request.method != "POST":
@@ -98,13 +152,18 @@ def retrieve(request):
         raise InvalidInput("Enter a search query.")
     k = integer_value(body.get("k", 5), "k")
 
+    if is_demo(request):
+        if len(query) > 1000:
+            raise InvalidInput("Search queries must be at most 1,000 characters.")
+        k = min(k, 3)
+        consume_quota(request)
     q_emb = client.embeddings.create(
         model="text-embedding-3-small",
         input=query,
     ).data[0].embedding
 
     chunks = (
-        Chunk.objects
+        Chunk.objects.filter(document__in=visible_documents(request))
         .exclude(embedding=None)
         .annotate(distance=CosineDistance("embedding", q_emb))
         .order_by("distance")[:k]
@@ -123,7 +182,6 @@ def retrieve(request):
         ]
     })
 
-@csrf_exempt
 @api_errors
 def ask(request):
     t0 = time.perf_counter()
@@ -141,6 +199,10 @@ def ask(request):
             return JsonResponse({"error": "question is required"}, status=400)
 
         max_distance = distance_value(body.get("max_distance", 0.95))
+        if is_demo(request):
+            if len(question) > 1000:
+                raise InvalidInput("Demo questions must be at most 1,000 characters.")
+            k, max_distance = min(k, 3), 0.95
 
         # Determining doc intent 
         q = question.lower()
@@ -162,7 +224,7 @@ def ask(request):
         elif session_doc_id:
             effective_document_id = int(session_doc_id)
         elif doc_intent:
-            latest_doc = Document.objects.order_by("-id").first()
+            latest_doc = visible_documents(request).order_by("-id").first()
             if latest_doc:
                 effective_document_id = latest_doc.id
 
@@ -172,13 +234,20 @@ def ask(request):
                 status=400
             )
 
-        if not Document.objects.filter(id=effective_document_id).exists():
+        if not visible_documents(request).filter(id=effective_document_id).exists():
             return JsonResponse({"error": "document_not_found", "message": "Select an existing document."}, status=404)
 
-        log = QueryLog.objects.create(
-            question=question, k=k, document_id=effective_document_id,
-            max_distance=max_distance,
-        )
+        if is_demo(request):
+            consume_quota(request)
+
+        workspace = get_workspace(request)
+        with transaction.atomic():
+            if workspace:
+                lock_workspace(workspace)
+            log = QueryLog.objects.create(
+                question=question, k=k, document_id=effective_document_id,
+                max_distance=max_distance, workspace=workspace,
+            )
 
         # 1) embed question
         q_emb = client.embeddings.create(
@@ -222,6 +291,7 @@ def ask(request):
         # 3) answer grounded in sources
         resp = client.responses.create(
             model="gpt-4.1-mini",
+            **({"max_output_tokens": 300} if is_demo(request) else {}),
             input=[
                 {"role": "system", "content": "Answer using ONLY the provided sources. If the sources don't contain the answer, say: I don't know."},
                 {"role": "user", "content": f"Question: {question}\n\nSources:\n{context}"},
@@ -241,9 +311,9 @@ def ask(request):
     except Exception as e:
         latency_ms = int((time.perf_counter() - t0) * 1000)
         if log:
-            log.error = repr(e)
-            log.latency_ms = latency_ms
-            log.save(update_fields=["error", "latency_ms"])
+            QueryLog.objects.filter(pk=log.pk).update(error=type(e).__name__ if is_demo(request) else repr(e), latency_ms=latency_ms)
+        if is_demo(request) and not workspace_is_active(get_workspace(request)):
+            raise WorkspaceExpired() from e
         raise
 
 def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
@@ -274,14 +344,26 @@ def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
     return chunks
 
 
-def store_document(request, title, text, source):
+def store_document(request, title, text, source, document_id=None):
     title = string_value(title, "title", default="Untitled", max_length=255) or "Untitled"
     text = string_value(text, "text")
     if len(text.encode("utf-8")) > MAX_UPLOAD_BYTES:
         raise InvalidInput("Text must be at most 2 MB.")
+    workspace = get_workspace(request)
+    target_id = integer_value(document_id, "document_id", maximum=9223372036854775807) if document_id not in (None, "") else None
+    if target_id and not visible_documents(request).filter(pk=target_id).exists():
+        raise Http404()
+    if workspace and len(text) > settings.DEMO_MAX_TEXT_CHARS:
+        raise InvalidInput("Temporary uploads may contain at most 20,000 extracted characters.")
     parts = chunk_text(text)
     if not parts:
         raise InvalidInput("Add some text before uploading.")
+
+    if workspace:
+        existing = visible_documents(request).filter(pk=target_id) if target_id else visible_documents(request).filter(title=title, source=source)
+        if not existing.exists() and workspace.documents.count() >= settings.DEMO_MAX_DOCUMENTS:
+            raise InvalidInput("Your workspace can hold five documents. Delete or replace one first.")
+        consume_quota(request, upload=True)
 
     # Finish every external call before changing the stored document.
     embeddings = []
@@ -293,7 +375,23 @@ def store_document(request, title, text, source):
         embeddings.extend(item.embedding for item in items)
 
     with transaction.atomic():
-        doc, created = Document.objects.select_for_update().get_or_create(title=title, source=source)
+        if workspace:
+            lock_workspace(workspace)
+        scoped = Document.objects.filter(workspace=workspace)
+        if target_id:
+            doc = scoped.select_for_update().filter(pk=target_id).first()
+            if doc is None:
+                raise Http404()
+            if scoped.filter(title=title, source=source).exclude(pk=doc.pk).exists():
+                raise InvalidInput("Another document already has this title and format. Choose a different title.")
+            doc.title, doc.source = title, source
+            doc.save(update_fields=["title", "source"])
+            created = False
+        else:
+            existing = scoped.select_for_update().filter(title=title, source=source).first()
+            if not existing and workspace and scoped.count() >= settings.DEMO_MAX_DOCUMENTS:
+                raise InvalidInput("Your workspace can hold five documents. Delete or replace one first.")
+            doc, created = (existing, False) if existing else (Document.objects.create(workspace=workspace, title=title, source=source), True)
         Chunk.objects.filter(document=doc).delete()
         Chunk.objects.bulk_create([
             Chunk(document=doc, chunk_index=i, text=part, embedding=embedding)
@@ -316,16 +414,14 @@ def upload(request):
     return uploaded
 
 
-@csrf_exempt
 @api_errors
 def ingest_text(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
     body = json_body(request)
-    return store_document(request, body.get("title"), body.get("text"), "ingested_text")
+    return store_document(request, body.get("title"), body.get("text"), "ingested_text", body.get("document_id"))
 
 
-@csrf_exempt
 @api_errors
 def ingest_pdf(request):
     if request.method != "POST":
@@ -335,17 +431,26 @@ def ingest_pdf(request):
         reader = PdfReader(uploaded)
         if reader.is_encrypted:
             raise InvalidInput("Password-protected PDFs are not supported.")
-        text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        if is_demo(request) and len(reader.pages) > settings.DEMO_MAX_PDF_PAGES:
+            raise InvalidInput("Temporary PDF uploads may contain at most 20 pages.")
+        pieces = []
+        total = 0
+        for page in reader.pages:
+            piece = page.extract_text() or ""
+            total += len(piece)
+            if is_demo(request) and total > settings.DEMO_MAX_TEXT_CHARS:
+                raise InvalidInput("Temporary uploads may contain at most 20,000 extracted characters.")
+            pieces.append(piece)
+        text = "\n".join(pieces).strip()
     except InvalidInput:
         raise
     except Exception:
         raise InvalidInput("This PDF could not be read. Choose a valid, text-based PDF.")
     if not text:
         raise InvalidInput("No text found. Scanned PDFs need OCR before uploading.")
-    return store_document(request, request.POST.get("title") or uploaded.name, text, "pdf")
+    return store_document(request, request.POST.get("title") or uploaded.name, text, "pdf", request.POST.get("document_id"))
 
 
-@csrf_exempt
 @api_errors
 def ingest_file(request):
     if request.method != "POST":
@@ -357,17 +462,16 @@ def ingest_file(request):
         text = uploaded.read().decode("utf-8-sig")
     except UnicodeDecodeError:
         raise InvalidInput("Save this file as UTF-8 text and try again.")
-    return store_document(request, request.POST.get("title") or uploaded.name, text, "text_file")
+    return store_document(request, request.POST.get("title") or uploaded.name, text, "text_file", request.POST.get("document_id"))
 
 
-@csrf_exempt
 @api_errors
 def documents(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET only"}, status=405)
 
     limit = integer_value(request.GET.get("limit", 20), "limit", maximum=100)
-    docs = Document.objects.order_by("-id")[:limit]
+    docs = visible_documents(request).order_by("-id")[:limit]
 
     return JsonResponse({
         "count": docs.count(),
@@ -381,10 +485,9 @@ def documents(request):
             for d in docs
         ],
         "current_document_id": request.session.get("current_document_id"),
-        "current_document_title": Document.objects.filter(id=request.session.get("current_document_id")).values_list("title", flat=True).first(),
+        "current_document_title": visible_documents(request).filter(id=request.session.get("current_document_id")).values_list("title", flat=True).first(),
     })
 
-@csrf_exempt
 @api_errors
 def select_document(request):
     if request.method != "POST":
@@ -402,13 +505,12 @@ def select_document(request):
         return JsonResponse({"error": "document_id must be an integer"}, status=400)
     
     #validating document exists
-    if not Document.objects.filter(id=doc_id).exists():
+    if not visible_documents(request).filter(id=doc_id).exists():
         return JsonResponse({"error": "Document not found"}, status=404)
     
     request.session["current_document_id"] = doc_id
     return JsonResponse({"current_document_id": doc_id, "status": "ok"})
 
-@csrf_exempt
 @api_errors
 def clear_selected_document(request):
     if request.method != "POST":
@@ -418,10 +520,40 @@ def clear_selected_document(request):
     request.session.modified = True
     return JsonResponse({"ok": True, "current_document_id": None})
 
-def app(request):
-    return render(request, "app.html")
+@api_errors
+def delete_document(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+    body = json_body(request)
+    document_id = integer_value(body.get('document_id'), 'document_id', maximum=9223372036854775807)
+    workspace = get_workspace(request)
+    with transaction.atomic():
+        if workspace:
+            lock_workspace(workspace)
+        doc = visible_documents(request).select_for_update().filter(pk=document_id).first()
+        if doc is None:
+            raise Http404()
+        QueryLog.objects.filter(workspace=workspace, document_id=doc.pk).delete()
+        doc.delete()
+    if request.session.get('current_document_id') == document_id:
+        request.session.pop('current_document_id', None)
+    return JsonResponse({'ok': True})
 
-@csrf_exempt
+
+@login_required
+def app(request):
+    try:
+        workspace = get_workspace(request)
+    except WorkspaceExpired:
+        logout(request)
+        return redirect('login')
+    return render(request, "app.html", {
+        "can_reset": settings.DEBUG and request.user.is_staff and not is_demo(request),
+        "is_demo": is_demo(request), "workspace": workspace,
+        "demo_question_limit": settings.DEMO_SESSION_HOURLY_LIMIT,
+        "demo_upload_limit": settings.DEMO_UPLOAD_SESSION_HOURLY_LIMIT,
+    })
+
 @api_errors
 def reset_data(request):
     """
@@ -431,7 +563,7 @@ def reset_data(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
 
-    if not getattr(settings, "DEBUG", False):
+    if is_demo(request) or not settings.DEBUG or not request.user.is_staff:
         return JsonResponse({"error": "forbidden"}, status=403)
 
     body = json_body(request)
@@ -465,7 +597,7 @@ def reset_data(request):
 def logs(request):
     limit = integer_value(request.GET.get("limit", 20), "limit", maximum=100)
 
-    rows = QueryLog.objects.order_by("-id")[:limit]
+    rows = QueryLog.objects.filter(workspace=get_workspace(request)).order_by("-id")[:limit]
 
     return JsonResponse({
         "count": rows.count(),
@@ -475,12 +607,13 @@ def logs(request):
                 "created_at": r.created_at.isoformat(),
                 "question": r.question,
                 "answer": r.answer,
-                "status": "error" if r.error else ("unanswered" if r.answer.strip().lower().replace("’", "'").rstrip(".") == "i don't know" else "answered"),
+                "status": "error" if r.error else "pending" if not r.answer and r.latency_ms is None else ("unanswered" if r.answer.strip().lower().replace("’", "'").rstrip(".") == "i don't know" else "answered"),
                 "k": r.k,
                 "document_id": r.document_id,
                 "max_distance": r.max_distance,
                 "best_distance": r.best_distance,
-                "error": r.error,
+                "error": "AI request failed. Please try again." if is_demo(request) and r.error else r.error,
+                "sources": r.sources,
                 "latency_ms": r.latency_ms,
             }
             for r in rows

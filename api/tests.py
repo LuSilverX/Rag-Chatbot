@@ -1,8 +1,18 @@
-from django.test import TestCase, override_settings
+from django.test import TestCase, Client, override_settings
+from django.contrib.auth import get_user_model
 from .views import chunk_text  
 import json
 from unittest.mock import patch, MagicMock
 from .models import Document, Chunk
+
+class AuthenticatedTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(username="test-reader")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
 
 class ChunkTextTests(TestCase):
     
@@ -36,7 +46,7 @@ class ChunkTextTests(TestCase):
         self.assertTrue(all(len(chunk) <= 30 for chunk in chunks))
         self.assertTrue(chunks[-1].endswith("part."))
 
-class ApiIntegrationTests(TestCase):
+class ApiIntegrationTests(AuthenticatedTestCase):
 
     @patch('api.views.client.embeddings.create') 
     def test_ingest_text_endpoint(self, mock_embeddings_create):
@@ -149,12 +159,14 @@ class ApiIntegrationTests(TestCase):
         self.assertEqual(log.question, "What is the secret password?")
         self.assertEqual(log.answer, "The secret password is Pineapple.")
 
-class ReliabilityTests(TestCase):
+class ReliabilityTests(AuthenticatedTestCase):
     def post_json(self, endpoint, payload):
         return self.client.post('/api/' + endpoint + '/', data=json.dumps(payload), content_type='application/json')
 
     @override_settings(DEBUG=True)
     def test_invalid_inputs_return_400_before_ai_calls(self):
+        self.user.is_staff = True
+        self.user.save()
         with patch('api.views.client.embeddings.create') as embed:
             for endpoint in ['ask', 'retrieve', 'ingest_text', 'select_document', 'reset_data']:
                 for body in ['{', '[]', 'null', '42']:
@@ -317,3 +329,142 @@ class ReliabilityTests(TestCase):
     def test_oversized_json_returns_validation_error(self):
         response = self.post_json('ingest_text', {'text': 'x' * (3 * 1024 * 1024)})
         self.assertEqual(response.status_code, 400)
+
+
+class AuthenticationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(username="reader", password="Test-only-password-73!")
+
+    def test_anonymous_page_redirects_and_apis_reject_before_ai_calls(self):
+        self.assertRedirects(self.client.get('/api/'), '/accounts/login/?next=/api/')
+        with patch('api.views.client.embeddings.create') as embed, patch('api.views.client.responses.create') as respond:
+            for endpoint in ['documents', 'logs']:
+                self.assertEqual(self.client.get(f'/api/{endpoint}/').status_code, 401)
+            for endpoint in ['ask', 'retrieve', 'ingest_text', 'ingest_pdf', 'ingest_file', 'select_document', 'clear_document', 'reset_data']:
+                with self.subTest(endpoint=endpoint):
+                    self.assertEqual(self.client.post(f'/api/{endpoint}/', {}).status_code, 401)
+            embed.assert_not_called()
+            respond.assert_not_called()
+
+    def test_real_login_csrf_and_logout_flow(self):
+        from types import SimpleNamespace
+        client = Client(enforce_csrf_checks=True)
+        self.assertEqual(client.get('/accounts/login/').status_code, 200)
+        token = client.cookies['csrftoken'].value
+        credentials = {'username': 'reader', 'password': 'Test-only-password-73!'}
+        self.assertEqual(client.post('/accounts/login/', credentials).status_code, 403)
+        response = client.post('/accounts/login/', credentials, HTTP_X_CSRFTOKEN=token)
+        self.assertRedirects(response, '/api/')
+        page = client.get('/api/')
+        self.assertContains(page, 'Signed in as reader')
+        self.assertNotContains(page, 'id="btnResetDb"')
+        token = client.cookies['csrftoken'].value
+        self.assertEqual(client.post('/api/clear_document/', '{}', content_type='application/json').status_code, 403)
+        self.assertEqual(client.post('/api/clear_document/', '{}', content_type='application/json', HTTP_X_CSRFTOKEN=token).status_code, 200)
+        with patch('api.views.client.embeddings.create') as embed:
+            embed.return_value.data = [SimpleNamespace(embedding=[0.1] * 1536)]
+            response = client.post('/api/ingest_text/', json.dumps({'title': 'Signed-in upload', 'text': 'A fact.'}), content_type='application/json', HTTP_X_CSRFTOKEN=token)
+            self.assertEqual(response.status_code, 200)
+            from django.core.files.uploadedfile import SimpleUploadedFile
+            response = client.post('/api/ingest_file/', {'file': SimpleUploadedFile('notes.txt', b'Another fact.')}, HTTP_X_CSRFTOKEN=token)
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(client.get('/accounts/logout/').status_code, 405)
+        self.assertEqual(client.post('/accounts/logout/').status_code, 403)
+        self.assertRedirects(client.post('/accounts/logout/', HTTP_X_CSRFTOKEN=token), '/accounts/login/')
+        self.assertEqual(client.get('/api/documents/').status_code, 401)
+
+    def test_invalid_login_and_external_redirect(self):
+        response = self.client.post('/accounts/login/', {'username': 'reader', 'password': 'incorrect'})
+        self.assertContains(response, 'not accepted')
+        self.assertEqual(self.client.get('/api/documents/').status_code, 401)
+        response = self.client.post('/accounts/login/', {'username': 'reader', 'password': 'Test-only-password-73!', 'next': 'https://example.org/'})
+        self.assertRedirects(response, '/api/')
+
+    @override_settings(DEBUG=True)
+    def test_reset_requires_staff_even_in_development(self):
+        self.client.force_login(self.user)
+        Document.objects.create(title='Preserve this')
+        response = self.client.post('/api/reset_data/', json.dumps({'confirm': 'RESET'}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Document.objects.count(), 1)
+        self.user.is_staff = True
+        self.user.save()
+        self.assertContains(self.client.get('/api/'), 'id="btnResetDb"')
+        response = self.client.post('/api/reset_data/', json.dumps({'confirm': 'RESET'}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Document.objects.count(), 0)
+
+    @override_settings(DEBUG=False)
+    def test_reset_disabled_for_staff_in_production(self):
+        self.user.is_staff = True
+        self.user.save()
+        self.client.force_login(self.user)
+        Document.objects.create(title='Preserve this')
+        response = self.client.post('/api/reset_data/', json.dumps({'confirm': 'RESET'}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Document.objects.count(), 1)
+
+
+class EnvironmentSettingsTests(TestCase):
+    def load_settings(self, changes=None):
+        import os
+        import runpy
+        from pathlib import Path
+        environment = {
+            'DJANGO_SECRET_KEY': 'test-only-secret-' + 'abcdef1234567890' * 4,
+            'DJANGO_ALLOWED_HOSTS': 'qa.example.com',
+            'POSTGRES_DB': 'testdb', 'POSTGRES_USER': 'testuser',
+            'POSTGRES_PASSWORD': 'test-password', 'POSTGRES_HOST': 'db',
+        }
+        environment.update(changes or {})
+        with patch.dict(os.environ, environment, clear=True), patch('dotenv.load_dotenv'):
+            return runpy.run_path(str(Path(__file__).resolve().parent.parent / 'config/settings.py'))
+
+    def test_defaults_are_production_and_use_environment(self):
+        settings = self.load_settings()
+        self.assertFalse(settings['DEBUG'])
+        for field in ['SECURE_SSL_REDIRECT', 'SESSION_COOKIE_SECURE', 'CSRF_COOKIE_SECURE']:
+            self.assertTrue(settings[field])
+        self.assertEqual(settings['DATABASES']['default']['HOST'], 'db')
+        self.assertNotIn('SECURE_PROXY_SSL_HEADER', settings)
+
+    def test_production_rejects_missing_or_unsafe_configuration(self):
+        from django.core.exceptions import ImproperlyConfigured
+        for changes in [{'DJANGO_SECRET_KEY': ''}, {'DJANGO_SECRET_KEY': 'short'}, {'DJANGO_ALLOWED_HOSTS': ''}, {'DJANGO_ALLOWED_HOSTS': '*'}, {'POSTGRES_PASSWORD': ''}, {'DJANGO_DEBUG': 'typo'}]:
+            with self.subTest(changes=changes), self.assertRaises(ImproperlyConfigured):
+                self.load_settings(changes)
+
+    def test_local_http_and_explicit_proxy_settings(self):
+        settings = self.load_settings({'DJANGO_DEBUG': 'true'})
+        self.assertFalse(settings['SECURE_SSL_REDIRECT'])
+        self.assertFalse(settings['SESSION_COOKIE_SECURE'])
+        settings = self.load_settings({'DJANGO_TRUST_PROXY': 'true', 'DJANGO_CSRF_TRUSTED_ORIGINS': 'https://qa.example.com'})
+        self.assertEqual(settings['SECURE_PROXY_SSL_HEADER'], ('HTTP_X_FORWARDED_PROTO', 'https'))
+        self.assertEqual(settings['CSRF_TRUSTED_ORIGINS'], ['https://qa.example.com'])
+
+
+class EvaluationAuthenticationTests(TestCase):
+    def test_evaluation_authenticates_and_rolls_back_temporary_records(self):
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+        from types import SimpleNamespace
+        from django.core.management import call_command
+        from .models import QueryLog
+        fixture = {'document': 'The museum has a blue gate.', 'cases': [
+            {'id': 'gate', 'question': 'What color is the gate?', 'patterns': ['blue'], 'evidence': ['blue']},
+            {'id': 'unknown', 'question': 'Who founded it?', 'unanswerable': True},
+        ]}
+        users_before = get_user_model().objects.count()
+        with tempfile.TemporaryDirectory() as directory, patch('api.management.commands.evaluate_rag.Path.read_text', return_value=json.dumps(fixture)), patch('api.views.client.embeddings.create') as embed, patch('api.views.client.responses.create') as respond:
+            embed.return_value.data = [SimpleNamespace(embedding=[0.1] * 1536)]
+            respond.side_effect = [SimpleNamespace(output_text='The gate is blue.'), SimpleNamespace(output_text="I don't know.")]
+            output = Path(directory) / 'report.json'
+            call_command('evaluate_rag', output=str(output), stdout=StringIO())
+            with output.open() as saved:
+                report = json.load(saved)
+            self.assertEqual(report['summary']['answer_checks_passed'], 2)
+        self.assertEqual(get_user_model().objects.count(), users_before)
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(QueryLog.objects.count(), 0)
