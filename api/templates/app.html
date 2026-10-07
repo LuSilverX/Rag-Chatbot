@@ -46,12 +46,12 @@
       <summary>Add or replace a document</summary>
       <label><input id="replaceSelected" type="checkbox" style="width:auto"> Replace the selected document with this upload or pasted text</label>
       <p class="muted">Replacement keeps the selected document's ID and updates its contents. If processing fails, the previous content is preserved.</p>
-      <p class="muted">Upload a text-based PDF, TXT or Markdown file, or paste text. Maximum 2 MB. Uploads and questions use OpenAI.{% if is_demo %} Up to five documents including sample copies, 20 PDF pages, and 20,000 extracted characters per document. Up to {{ demo_upload_limit }} upload attempts and {{ demo_question_limit }} question/search attempts per hour; shared limits also apply.{% endif %}</p>
+      <p class="muted">Upload a text-based PDF, TXT, Markdown, JSON or CSV file, or paste text. JSON accepts objects and arrays. CSV uses commas and a first row of unique column names. Maximum 2 MB. Uploads and questions use OpenAI.{% if is_demo %} Up to five documents including sample copies, 20 PDF pages, and 20,000 extracted characters per document. Up to {{ demo_upload_limit }} upload attempts and {{ demo_question_limit }} question/search attempts per hour; shared limits also apply.{% endif %}</p>
       <div class="grid">
         <section>
           <h3>Upload a file</h3>
           <label for="fileTitle">Title (optional)</label><input id="fileTitle" placeholder="Defaults to the filename">
-          <label for="documentFile">PDF, TXT or Markdown</label><input id="documentFile" type="file" accept=".pdf,.txt,.md">
+          <label for="documentFile">PDF, TXT, Markdown, JSON or CSV</label><input id="documentFile" type="file" accept=".pdf,.txt,.md,.json,.csv">
           <div class="actions"><button id="btnUpload" class="primary">Upload document</button></div>
           <p id="outUpload" class="status" role="status"></p>
         </section>
@@ -196,7 +196,7 @@ if ($('btnIngestText')) $('btnIngestText').onclick=() => action('btnIngestText',
 if ($('btnUpload')) $('btnUpload').onclick=() => action('btnUpload','outUpload',async () => {
   const file=$('documentFile').files[0];
   if (!file) throw new Error('Choose a file first.');
-  if (!/\.(pdf|txt|md)$/i.test(file.name)) throw new Error('Choose a PDF, TXT or Markdown file.');
+  if (!/\.(pdf|txt|md|json|csv)$/i.test(file.name)) throw new Error('Choose a PDF, TXT, Markdown, JSON or CSV file.');
   if (file.size>2*1024*1024) throw new Error('Files must be at most 2 MB.');
   const form=new FormData(); const replacement=replacementId(); if (replacement) form.append('document_id',String(replacement)); form.append('file',file); form.append('title',$('fileTitle').value.trim());
   message('outUpload','Uploading document…');

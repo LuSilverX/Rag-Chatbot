@@ -19,6 +19,7 @@ from .demo import (is_demo, visible_documents, consume_quota, DemoLimitExceeded,
                    get_workspace, WorkspaceExpired, workspace_is_active, lock_workspace,
                    create_workspace, cleanup_expired_workspaces)
 from .models import DemoAccount
+from .ingestion import json_to_text, csv_to_text, StructuredInputError
 from pypdf import PdfReader
 import re
 from django.conf import settings
@@ -57,7 +58,7 @@ def api_errors(view):
             return demo_limit_response(exc)
         except RequestDataTooBig:
             return JsonResponse({"error": "invalid_input", "message": "The request is too large. Text and files must be at most 2 MB."}, status=400)
-        except InvalidInput as exc:
+        except (InvalidInput, StructuredInputError) as exc:
             return JsonResponse({"error": "invalid_input", "message": str(exc)}, status=400)
         except OpenAIError:
             logger.exception("AI request failed")
@@ -347,6 +348,8 @@ def chunk_text(text: str, max_chars: int = 900, overlap: int = 200):
 def store_document(request, title, text, source, document_id=None):
     title = string_value(title, "title", default="Untitled", max_length=255) or "Untitled"
     text = string_value(text, "text")
+    if '\x00' in text or any(0xD800 <= ord(char) <= 0xDFFF for char in text):
+        raise InvalidInput("Document text contains unsupported Unicode characters or null bytes.")
     if len(text.encode("utf-8")) > MAX_UPLOAD_BYTES:
         raise InvalidInput("Text must be at most 2 MB.")
     workspace = get_workspace(request)
@@ -456,13 +459,22 @@ def ingest_file(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
     uploaded = upload(request)
-    if not uploaded.name.lower().endswith((".txt", ".md")):
-        raise InvalidInput("Choose a .txt or .md file.")
+    suffix = uploaded.name.lower().rsplit('.', 1)[-1]
+    if suffix not in {"txt", "md", "json", "csv"}:
+        raise InvalidInput("Choose a TXT, Markdown, JSON or CSV file.")
     try:
         text = uploaded.read().decode("utf-8-sig")
     except UnicodeDecodeError:
         raise InvalidInput("Save this file as UTF-8 text and try again.")
-    return store_document(request, request.POST.get("title") or uploaded.name, text, "text_file", request.POST.get("document_id"))
+    if '\x00' in text:
+        raise InvalidInput("The file contains null bytes. Choose a UTF-8 text file.")
+    source = "text_file"
+    limit = settings.DEMO_MAX_TEXT_CHARS if is_demo(request) else MAX_UPLOAD_BYTES
+    if suffix == "json":
+        text, source = json_to_text(text, limit), "json"
+    elif suffix == "csv":
+        text, source = csv_to_text(text, limit), "csv"
+    return store_document(request, request.POST.get("title") or uploaded.name, text, source, request.POST.get("document_id"))
 
 
 @api_errors

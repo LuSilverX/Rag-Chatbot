@@ -1,0 +1,8 @@
+{
+  "store": "Harbor Demo Store",
+  "products": [
+    {"name": "Trail Lantern", "price_usd": 29, "battery_hours": 12},
+    {"name": "Pocket Compass", "price_usd": 18, "waterproof": true}
+  ],
+  "support": {"hours": "Monday through Friday, 9 AM to 5 PM"}
+}
