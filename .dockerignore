@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+.env.*
+*.env
+cookies.txt
+*.sqlite3
+**/__pycache__
+**/*.pyc
+*.log
+.vscode
+assets
+staticfiles
+work
+outputs
+evaluations/latest.json
