@@ -42,6 +42,8 @@ if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+DJANGO_TRUST_CLIENT_IP = env_bool("DJANGO_TRUST_CLIENT_IP")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
@@ -72,6 +74,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'config.middleware.TrustedClientIPMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -113,6 +116,7 @@ DATABASES = {
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'ragpass' if DEBUG else ''),
         'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1' if DEBUG else ''),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'OPTIONS': {'connect_timeout': 5},
     }
 }
 
