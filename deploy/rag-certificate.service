@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew the RAG portfolio HTTPS certificate
+Requires=docker.service
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/rag-portfolio
+ExecStart=/opt/rag-portfolio/deploy/renew-certificate.sh
+TimeoutStartSec=10min

@@ -1,0 +1,16 @@
+# Public entry points; requires a trusted certificate and explicit allowed hosts.
+services:
+  nginx:
+    ports: !override
+      - '80:8080'
+      - '443:8443'
+    volumes:
+      - /var/www/certbot:/var/www/certbot:ro
+  certbot:
+    image: certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    profiles: ['maintenance']
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
+      - /var/log/letsencrypt:/var/log/letsencrypt
+      - /var/www/certbot:/var/www/certbot
