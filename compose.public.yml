@@ -1,6 +1,8 @@
 # Public entry points; requires a trusted certificate and explicit allowed hosts.
 services:
   nginx:
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports: !override
       - '80:8080'
       - '443:8443'
