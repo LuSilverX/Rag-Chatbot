@@ -1,0 +1,98 @@
+name: Test, build, and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: ragdb
+          POSTGRES_USER: raguser
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U raguser -d ragdb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_DEBUG: 'true'
+      DJANGO_SECRET_KEY: ci-only-secret-not-used-in-production
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ci-only-password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      OPENAI_API_KEY: ci-placeholder-no-live-api-calls
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python -m pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Build tested revision
+        run: |
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "rag-chatbot:$GITHUB_SHA" .
+          docker save "rag-chatbot:$GITHUB_SHA" | gzip > image.tar.gz
+          python3 - <<'PY'
+          import tarfile
+          from deploy.apply_release import FILES
+          with tarfile.open('release.tar', 'w') as archive:
+              for name in (*FILES, 'image.tar.gz'):
+                  archive.add(name, arcname=name)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.tar
+          compression-level: 0
+          retention-days: 3
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-${{ github.sha }}
+      - name: Deploy and verify, with server-side rollback
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          test -n "$DEPLOY_TOKEN" && test -n "$DEPLOY_URL"
+          curl --fail-with-body --silent --show-error --connect-timeout 15 --max-time 600 \
+            -H "Authorization: Bearer $DEPLOY_TOKEN" \
+            -H "X-Release-SHA: $GITHUB_SHA" \
+            -H 'Content-Type: application/octet-stream' \
+            --data-binary @release.tar "$DEPLOY_URL/_deploy/"
+          curl --fail --silent --show-error --max-time 15 "$DEPLOY_URL/health/"
