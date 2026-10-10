@@ -14,3 +14,7 @@ pgdata/
 staticfiles/
 .env.*
 !.env.example
+.pytest_cache/
+image.tar.gz
+release.tar
+.deploy-state/
