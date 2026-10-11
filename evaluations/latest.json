@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-25T01:55:21.756409+00:00",
+  "recorded_at": "2026-10-10T22:50:13.031783+00:00",
   "models": {
     "embeddings": "text-embedding-3-small",
     "answers": "gpt-4.1-mini"
@@ -8,6 +8,7 @@
   "chunks_created": 4,
   "k": 3,
   "max_distance": 0.95,
+  "fixture_sha256": "0f112afb3c1740da78ceb45b7e3dee18da8c0165af6ba2a4be13a15057d035eb",
   "method": "Deterministic expected-fact regex checks and exact abstention checks; inspect recorded answers for semantic correctness. This small synthetic set is not a general accuracy benchmark.",
   "summary": {
     "questions": 20,
@@ -17,8 +18,9 @@
     "unsupported_abstentions_passed": 8,
     "unsupported_questions": 8,
     "evidence_retrieved": 12,
-    "median_latency_ms": 1219,
-    "max_latency_ms": 3921
+    "logging_checks_passed": 20,
+    "median_latency_ms": 1104,
+    "max_latency_ms": 4074
   },
   "results": [
     {
@@ -26,11 +28,13 @@
       "question": "What time does Harbor Museum open and close?",
       "unanswerable": false,
       "http_status": 200,
-      "answer": "Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM and is closed on Mondays.",
+      "answer": "Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1565,
+      "latency_ms": 2275,
       "best_distance": 0.2776853002772226,
+      "logged_latency_ms": 2270,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -58,8 +62,10 @@
       "answer": "The Harbor Museum is closed on Mondays.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 3921,
+      "latency_ms": 2069,
       "best_distance": 0.43690335009695425,
+      "logged_latency_ms": 2061,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -84,26 +90,28 @@
       "question": "How much is standard admission?",
       "unanswerable": false,
       "http_status": 200,
-      "answer": "Standard admission costs 12 dollars. Children under six enter free. (source 1)",
+      "answer": "Standard admission to the Harbor Museum costs 12 dollars. Children under six enter free. (source 1)",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1756,
-      "best_distance": 0.586361912570307,
+      "latency_ms": 4074,
+      "best_distance": 0.586383350684639,
+      "logged_latency_ms": 4037,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
           "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
-          "distance": 0.586361912570307
+          "distance": 0.586383350684639
         },
         {
           "chunk_index": 2,
           "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
-          "distance": 0.7052043765880113
+          "distance": 0.705215120502114
         },
         {
           "chunk_index": 3,
           "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
-          "distance": 0.7158294966441718
+          "distance": 0.7158201517512435
         }
       ],
       "error": null
@@ -116,23 +124,25 @@
       "answer": "Children under six can enter free.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1104,
-      "best_distance": 0.6841947271649389,
+      "latency_ms": 1684,
+      "best_distance": 0.6841027618998372,
+      "logged_latency_ms": 1628,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
           "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
-          "distance": 0.6841947271649389
+          "distance": 0.6841027618998372
         },
         {
           "chunk_index": 2,
           "text": "The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM. Lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. Food and drinks must stay in the cafe or courtyard. Water bottles should be sealed while visitors move through exhibition rooms. Lost property is taken to reception, where staff record a short description of each item. Visitors who leave a personal item behind should contact reception with a description. The reading corner has seats for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance.",
-          "distance": 0.7298856683643407
+          "distance": 0.7298338935144393
         },
         {
           "chunk_index": 3,
           "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
-          "distance": 0.7435177919068234
+          "distance": 0.7434645858360586
         }
       ],
       "error": null
@@ -145,8 +155,10 @@
       "answer": "The signature exhibit is called the Moonstone Compass.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1533,
+      "latency_ms": 2128,
       "best_distance": 0.5296927715579196,
+      "logged_latency_ms": 2116,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 1,
@@ -174,8 +186,10 @@
       "answer": "The Moonstone Compass is displayed in Gallery Two.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1015,
+      "latency_ms": 1391,
       "best_distance": 0.362741839650496,
+      "logged_latency_ms": 1378,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 1,
@@ -203,8 +217,10 @@
       "answer": "The compass demonstration begins at 2 PM each open day.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1770,
+      "latency_ms": 1977,
       "best_distance": 0.43985528375533145,
+      "logged_latency_ms": 1952,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 1,
@@ -232,8 +248,10 @@
       "answer": "Photography without flash is allowed in the permanent galleries.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1369,
+      "latency_ms": 936,
       "best_distance": 0.5407969795871019,
+      "logged_latency_ms": 928,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 3,
@@ -261,8 +279,10 @@
       "answer": "The cafe's lunch hours are from noon to 3 PM.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1334,
+      "latency_ms": 996,
       "best_distance": 0.5272506061715382,
+      "logged_latency_ms": 991,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 2,
@@ -287,11 +307,13 @@
       "question": "Do the lockers cost money, and where are they?",
       "unanswerable": false,
       "http_status": 200,
-      "answer": "The lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. (source 1)",
+      "answer": "The lockers are free and located beside reception. Large backpacks must be stored in a locker before entering the galleries. (Source 1)",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1476,
+      "latency_ms": 1074,
       "best_distance": 0.6494397831228305,
+      "logged_latency_ms": 1068,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 2,
@@ -319,8 +341,10 @@
       "answer": "The east entrance provides wheelchair access.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1368,
+      "latency_ms": 1050,
       "best_distance": 0.5089270146392236,
+      "logged_latency_ms": 1044,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 3,
@@ -345,11 +369,13 @@
       "question": "When is the quiet visiting hour?",
       "unanswerable": false,
       "http_status": 200,
-      "answer": "The quiet visiting hour is from 10 AM to 11 AM on Thursdays.",
+      "answer": "The quiet visiting hour runs from 10 AM to 11 AM on Thursdays.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": true,
-      "latency_ms": 1230,
+      "latency_ms": 1042,
       "best_distance": 0.47658185615110127,
+      "logged_latency_ms": 1036,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 3,
@@ -377,8 +403,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 1168,
+      "latency_ms": 1073,
       "best_distance": 0.4350588481053772,
+      "logged_latency_ms": 1066,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -406,23 +434,25 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 971,
-      "best_distance": 0.5548228486486173,
+      "latency_ms": 1061,
+      "best_distance": 0.554931684111287,
+      "logged_latency_ms": 1056,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
           "text": "Harbor Museum \u2014 synthetic evaluation guide. Visiting: Harbor Museum opens Tuesday through Sunday from 10 AM to 5 PM. It is closed on Mondays. Standard admission costs 12 dollars. Children under six enter free. Tickets are purchased at the front desk on the day of the visit. A ticket covers the permanent collection and the courtyard for that day. Visitors may leave for lunch and return by showing their stamped ticket at the entrance. The museum asks visitors to keep their tickets until the end of their visit. Group organizers should gather their party in the courtyard before approaching the desk. The entrance is on the east side of the building beside the blue gate. The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day.",
-          "distance": 0.5548228486486173
+          "distance": 0.554931684111287
         },
         {
           "chunk_index": 1,
           "text": "The courtyard has benches and a drinking fountain. Exhibitions: The signature exhibit is the Moonstone Compass. It is displayed in Gallery Two. The compass demonstration begins at 2 PM each open day. Photography without flash is allowed in the permanent galleries. Visitors must keep bags away from display cases and leave enough room for others to read the labels. Gallery attendants can point out the start of the exhibition route. Printed labels describe how each instrument was used at sea. Visitors can follow the blue arrows through the navigation collection and return through the map room. The map room contains replicas intended for close inspection; original maps stay behind glass. The demonstration explains how navigators used instruments together, and visitors watch from marked standing areas. Services: The cafe serves lunch from noon to 3 PM. The gift shop closes at 4:30 PM.",
-          "distance": 0.6248409319316021
+          "distance": 0.6249237782863819
         },
         {
           "chunk_index": 3,
           "text": "s for visitors who want to take a quiet break. Printed guides must be returned to the rack when leaving so the next visitor can use them. Accessibility: Wheelchair access is through the east entrance. An elevator connects the ground floor with Gallery Two. A quiet visiting hour runs from 10 AM to 11 AM on Thursdays. During that hour the museum reduces sound from the demonstration displays. Service animals are welcome in all public areas. Staff can provide a large-print gallery guide at reception. Visitors may ask an attendant for the shortest route to the elevator. Benches are positioned along the main exhibition route. The courtyard route avoids the steps beside the old loading door. Visitors using this route should follow the signs for the east entrance.",
-          "distance": 0.6452853415375314
+          "distance": 0.6453897106793374
         }
       ],
       "error": null
@@ -435,8 +465,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 1026,
+      "latency_ms": 906,
       "best_distance": 0.489149565202332,
+      "logged_latency_ms": 900,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -464,8 +496,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 1102,
+      "latency_ms": 845,
       "best_distance": 0.8476647589428311,
+      "logged_latency_ms": 839,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -493,8 +527,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 893,
+      "latency_ms": 3429,
       "best_distance": 0.44019191432847804,
+      "logged_latency_ms": 3400,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -522,8 +558,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 998,
+      "latency_ms": 1134,
       "best_distance": 0.5638681851956795,
+      "logged_latency_ms": 1122,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -551,8 +589,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 973,
+      "latency_ms": 1253,
       "best_distance": 0.56611950647337,
+      "logged_latency_ms": 1231,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 0,
@@ -580,8 +620,10 @@
       "answer": "I don't know.",
       "answer_check_passed": true,
       "expected_evidence_retrieved": null,
-      "latency_ms": 1208,
+      "latency_ms": 943,
       "best_distance": 0.9090117956343344,
+      "logged_latency_ms": 934,
+      "logging_check_passed": true,
       "sources": [
         {
           "chunk_index": 2,

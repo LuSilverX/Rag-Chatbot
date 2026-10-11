@@ -313,6 +313,34 @@ class ReliabilityTests(AuthenticatedTestCase):
         self.assertTrue(log.error)
         self.assertIsNotNone(log.latency_ms)
 
+    @patch('api.views.client.responses.create')
+    @patch('api.views.client.embeddings.create')
+    def test_answer_api_failures_preserve_retrieval_diagnostics(self, embed, respond):
+        from types import SimpleNamespace
+        from openai import APIConnectionError, RateLimitError
+        from .models import QueryLog
+        import httpx
+        doc = self.original_document()
+        embed.return_value.data = [SimpleNamespace(embedding=[0.1] * 1536)]
+        request = httpx.Request('POST', 'https://api.openai.com/v1/responses')
+        failures = [APIConnectionError(request=request), RateLimitError(
+            'Simulated rate limit', response=httpx.Response(429, request=request), body=None,
+        )]
+        for failure in failures:
+            with self.subTest(error=type(failure).__name__):
+                respond.side_effect = failure
+                response = self.post_json('ask', {'question': 'What does it say?', 'document_id': doc.id})
+                self.assertEqual(response.status_code, 502)
+                self.assertEqual(response.json()['error'], 'ai_unavailable')
+                log = QueryLog.objects.latest('id')
+                self.assertIn(type(failure).__name__, log.error)
+                self.assertGreaterEqual(log.latency_ms, 0)
+                self.assertAlmostEqual(log.best_distance, 0, places=6)
+                self.assertEqual(log.sources[0]['text'], 'Original content')
+                self.assertAlmostEqual(log.sources[0]['distance'], 0, places=6)
+                self.assertEqual(log.answer, '')
+                self.assertEqual(self.client.get('/api/logs/').json()['logs'][0]['status'], 'error')
+
     @patch('api.views.client.embeddings.create')
     def test_uploaded_replacements_preserve_chunks_on_ai_failure(self, embed):
         from types import SimpleNamespace
@@ -465,6 +493,7 @@ class EvaluationAuthenticationTests(TestCase):
             with output.open() as saved:
                 report = json.load(saved)
             self.assertEqual(report['summary']['answer_checks_passed'], 2)
+            self.assertEqual(report['summary']['logging_checks_passed'], 2)
         self.assertEqual(get_user_model().objects.count(), users_before)
         self.assertEqual(Document.objects.count(), 0)
         self.assertEqual(QueryLog.objects.count(), 0)

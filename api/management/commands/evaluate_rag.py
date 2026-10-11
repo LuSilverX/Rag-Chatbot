@@ -1,5 +1,6 @@
 """Run a small live evaluation using only the bundled synthetic fixture."""
 import json
+import hashlib
 import re
 import statistics
 import time
@@ -32,7 +33,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         fixture_path = Path(settings.BASE_DIR) / 'evaluations/cases.json'
-        fixture = json.loads(fixture_path.read_text())
+        fixture_text = fixture_path.read_text()
+        fixture = json.loads(fixture_text)
         factory = RequestFactory()
         session = Session()
         rows = []
@@ -68,12 +70,21 @@ class Command(BaseCommand):
                 correct = abstained if unanswerable else bool(matches(case['patterns'], answer)) and not abstained
                 retrieved = None if unanswerable else bool(matches(case['evidence'], source_text))
                 log = QueryLog.objects.filter(document_id=document_id).order_by('-id').first()
+                logging_passed = bool(
+                    log and log.question == case['question']
+                    and log.answer == answer and not log.error
+                    and log.latency_ms is not None and log.latency_ms >= 0
+                    and log.best_distance is not None
+                    and log.sources == result.get('sources', [])
+                )
                 rows.append({
                     'id': case['id'], 'question': case['question'], 'unanswerable': unanswerable,
                     'http_status': response.status_code, 'answer': answer,
                     'answer_check_passed': response.status_code == 200 and correct,
                     'expected_evidence_retrieved': retrieved,
                     'latency_ms': elapsed, 'best_distance': log.best_distance if log else None,
+                    'logged_latency_ms': log.latency_ms if log else None,
+                    'logging_check_passed': logging_passed,
                     'sources': [{key: value for key, value in source.items() if key != 'document_id'} for source in result.get('sources', [])],
                     'error': result.get('error'),
                 })
@@ -87,6 +98,7 @@ class Command(BaseCommand):
             'recorded_at': datetime.now(timezone.utc).isoformat(),
             'models': {'embeddings': 'text-embedding-3-small', 'answers': 'gpt-4.1-mini'},
             'fixture': 'cases.json', 'chunks_created': chunks_created, 'k': 3, 'max_distance': 0.95,
+            'fixture_sha256': hashlib.sha256(fixture_text.encode()).hexdigest(),
             'method': 'Deterministic expected-fact regex checks and exact abstention checks; inspect recorded answers for semantic correctness. This small synthetic set is not a general accuracy benchmark.',
             'summary': {
                 'questions': len(rows), 'answer_checks_passed': sum(row['answer_check_passed'] for row in rows),
@@ -95,6 +107,7 @@ class Command(BaseCommand):
                 'unsupported_abstentions_passed': sum(row['answer_check_passed'] for row in unsupported),
                 'unsupported_questions': len(unsupported),
                 'evidence_retrieved': sum(row['expected_evidence_retrieved'] is True for row in supported),
+                'logging_checks_passed': sum(row['logging_check_passed'] for row in rows),
                 'median_latency_ms': round(statistics.median(row['latency_ms'] for row in rows)),
                 'max_latency_ms': max(row['latency_ms'] for row in rows),
             },
@@ -105,5 +118,6 @@ class Command(BaseCommand):
         output.write_text(json.dumps(report, indent=2) + '\n')
         self.stdout.write(json.dumps(report['summary'], indent=2))
         self.stdout.write(f'Saved {output}. Evaluation documents and logs were rolled back.')
-        if not all(row['answer_check_passed'] and row['expected_evidence_retrieved'] is not False for row in rows):
+        if not all(row['answer_check_passed'] and row['expected_evidence_retrieved'] is not False
+                   and row['logging_check_passed'] for row in rows):
             raise CommandError('Some evaluation checks failed; inspect the report.')

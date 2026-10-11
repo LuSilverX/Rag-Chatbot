@@ -289,6 +289,10 @@ def ask(request):
         ]
         context = "\n\n".join([f"[source {i+1}] {c.text}" for i, c in enumerate(chunks)])
 
+        # Preserve retrieval diagnostics even if the answer API fails.
+        log.sources = sources
+        log.save(update_fields=["sources"])
+
         # 3) answer grounded in sources
         resp = client.responses.create(
             model="gpt-4.1-mini",
